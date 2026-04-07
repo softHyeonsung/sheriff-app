@@ -3,9 +3,10 @@
 // TODO (MAP-01): Replace react-native-maps (Google/Apple) with Kakao Map WebView for KR production.
 //   Pattern: mapProvider = userCountry === 'KR' ? KakaoMapWebView : <MapView provider={PROVIDER_GOOGLE} />
 
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   StyleSheet,
@@ -42,11 +43,13 @@ const PIN_LABELS: Record<MapPin['type'], string> = {
   saved: '저장',
 };
 
-// Mode FAB config — colors match Figma (blue/yellow/orange)
-const MODE_CONFIG: { mode: MapMode; label: string; icon: string; color: string }[] = [
-  { mode: 'basic',            label: '기본',       icon: '🗺',  color: '#4285F4' },
-  { mode: 'my_map',           label: '내 지도',    icon: '🔖',  color: '#FFD700' },
-  { mode: 'gathering_quest',  label: '모임·퀘스트', icon: '🧭', color: '#FFAC30' },
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+// Mode FAB config — Ionicons (no emoji — DESIGN.md: emoji renders inconsistently on Android)
+const MODE_CONFIG: { mode: MapMode; label: string; icon: IoniconName; color: string; iconColor: string }[] = [
+  { mode: 'basic',           label: '기본',       icon: 'map',      color: '#4285F4', iconColor: '#fff'    },
+  { mode: 'my_map',          label: '내 지도',    icon: 'bookmark', color: '#FFD700', iconColor: '#1A1108' },
+  { mode: 'gathering_quest', label: '모임·퀘스트', icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108' },
 ];
 
 // Fallback center: Seoul (when location permission denied — DESIGN.md § Location)
@@ -183,7 +186,11 @@ export default function MapScreen() {
               activeOpacity={0.8}
               accessibilityLabel={cfg.label}
             >
-              <Text style={styles.fabIcon}>{cfg.icon}</Text>
+              <Ionicons
+                name={cfg.icon}
+                size={20}
+                color={isActive ? cfg.iconColor : '#8A6030'}
+              />
             </TouchableOpacity>
           );
         })}
@@ -200,7 +207,7 @@ export default function MapScreen() {
         }}
         activeOpacity={0.8}
       >
-        <Text style={styles.locationFabIcon}>⊙</Text>
+        <Ionicons name="locate" size={20} color="#FFAC30" />
       </TouchableOpacity>
 
       {/* Pin detail card — slides up from bottom */}
@@ -273,9 +280,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#EFE0C4',
   },
-  fabIcon: {
-    fontSize: 20,
-  },
   locationFab: {
     position: 'absolute',
     right: 16,
@@ -290,10 +294,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 3,
-  },
-  locationFabIcon: {
-    fontSize: 18,
-    color: '#FFAC30',
   },
   pinCard: {
     position: 'absolute',
