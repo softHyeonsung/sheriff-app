@@ -215,7 +215,8 @@ export default function MapScreen() {
         <Animated.View
           style={[
             styles.pinCard,
-            { bottom: insets.bottom + 16, transform: [{ translateY: cardTranslateY }] },
+            // bottom: tab bar (64) + gap (8) + safe area + 8 margin = insets.bottom + 80
+            { bottom: insets.bottom + 80, transform: [{ translateY: cardTranslateY }] },
           ]}
         >
           {/* Type badge */}
