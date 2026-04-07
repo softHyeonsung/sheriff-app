@@ -1,69 +1,139 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
+// 경로: app/(tabs)/_layout.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-/**
- * 하단 탭에 사용할 아이콘 컴포넌트
- */
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={24} style={{ marginBottom: -3 }} {...props} />;
+// ── Icon map ───────────────────────────────────────────────────────────────────
+
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const TAB_ICONS: Record<string, { focused: IoniconName; unfocused: IoniconName }> = {
+  index:     { focused: 'map',    unfocused: 'map-outline' },
+  feed:      { focused: 'chatbox', unfocused: 'chatbox-outline' },
+  community: { focused: 'people', unfocused: 'people-outline' },
+  chat:      { focused: 'send',   unfocused: 'send-outline' },
+  profile:   { focused: 'person', unfocused: 'person-outline' },
+};
+
+// ── Floating tab bar ───────────────────────────────────────────────────────────
+
+function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.tabBarOuter, { bottom: insets.bottom + 8 }]}>
+      <View style={styles.tabBar}>
+        {state.routes.map((route, index) => {
+          const isFocused = state.index === index;
+          const icons = TAB_ICONS[route.name];
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={onPress}
+              style={styles.tabItem}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isFocused }}
+            >
+              <Ionicons
+                name={isFocused ? icons?.focused : icons?.unfocused}
+                size={24}
+                color={isFocused ? '#FFAC30' : '#8A6030'}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
+
+// ── Layout ─────────────────────────────────────────────────────────────────────
 
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: '#2f95dc', // 활성화된 탭 색상 (보안관 브랜드 색으로 추후 변경)
-        headerShown: true,             // 상단 타이틀 표시 여부
-      }}>
-      
-      {/* 1. 지도 (홈) */}
+        headerShown: true,
+        headerStyle: { backgroundColor: '#FFFDF7' },
+        headerTintColor: '#1A1108',
+        headerTitleStyle: { fontFamily: 'AppleSDGothicNeo-Bold', fontSize: 18 },
+        headerShadowVisible: false,
+      }}
+    >
+      {/* 1. 지도 — full-bleed, no header */}
       <Tabs.Screen
         name="index"
-        options={{
-          title: '지도',
-          tabBarIcon: ({ color }) => <TabBarIcon name="map" color={color} />,
-        }}
+        options={{ title: '지도', headerShown: false }}
       />
 
       {/* 2. 피드 */}
       <Tabs.Screen
         name="feed"
-        options={{
-          title: '피드',
-          tabBarIcon: ({ color }) => <TabBarIcon name="th-list" color={color} />,
-        }}
+        options={{ title: '보안관' }}
       />
 
-      {/* 3. 채팅 */}
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: '채팅',
-          tabBarIcon: ({ color }) => <TabBarIcon name="comments" color={color} />,
-        }}
-      />
-
-      {/* 4. 모임 (Gathering/Quest 통합 또는 구분) */}
+      {/* 3. 모임 */}
       <Tabs.Screen
         name="community"
-        options={{
-          title: '모임',
-          tabBarIcon: ({ color }) => <TabBarIcon name="users" color={color} />,
-        }}
+        options={{ title: '모임' }}
+      />
+
+      {/* 4. 채팅 */}
+      <Tabs.Screen
+        name="chat"
+        options={{ title: '채팅' }}
       />
 
       {/* 5. 프로필 */}
       <Tabs.Screen
         name="profile"
-        options={{
-          title: '프로필',
-          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
-        }}
+        options={{ title: '프로필' }}
       />
     </Tabs>
   );
 }
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  tabBarOuter: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFDF7',
+    borderRadius: 32,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    shadowColor: '#A36E1D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+  },
+});
