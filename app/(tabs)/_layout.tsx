@@ -18,6 +18,15 @@ const TAB_ICONS: Record<string, { focused: IoniconName; unfocused: IoniconName }
   profile:   { focused: 'person', unfocused: 'person-outline' },
 };
 
+// Korean accessibility labels — DESIGN.md: all interactive elements need Korean accessibilityLabel
+const TAB_LABELS: Record<string, string> = {
+  index:     '지도 탭',
+  feed:      '피드 탭',
+  community: '모임 탭',
+  chat:      '채팅 탭',
+  profile:   '프로필 탭',
+};
+
 // ── Floating tab bar ───────────────────────────────────────────────────────────
 
 function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
@@ -49,6 +58,7 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityState={{ selected: isFocused }}
+              accessibilityLabel={TAB_LABELS[route.name]}
             >
               <Ionicons
                 name={isFocused ? icons?.focused : icons?.unfocused}
