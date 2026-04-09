@@ -188,9 +188,14 @@ export default function MapScreen() {
             >
               <Ionicons
                 name={cfg.icon}
-                size={20}
+                size={isActive ? 22 : 18}
                 color={isActive ? cfg.iconColor : '#8A6030'}
               />
+              {isActive && (
+                <Text style={[styles.fabLabel, { color: cfg.iconColor }]} numberOfLines={1}>
+                  {cfg.label}
+                </Text>
+              )}
             </TouchableOpacity>
           );
         })}
@@ -209,6 +214,14 @@ export default function MapScreen() {
       >
         <Ionicons name="locate" size={20} color="#FFAC30" />
       </TouchableOpacity>
+
+      {/* 내 지도 empty state */}
+      {mode === 'my_map' && visiblePins.length === 0 && (
+        <View style={[styles.myMapEmpty, { bottom: insets.bottom + 80 }]}>
+          <Text style={styles.myMapEmptyText}>아직 저장한 장소가 없어요</Text>
+          <Text style={styles.myMapEmptyHint}>지도에서 핀을 탭하면 저장할 수 있어요</Text>
+        </View>
+      )}
 
       {/* Pin detail card — slides up from bottom */}
       {selectedPin && (
@@ -265,16 +278,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   fabBtn: {
-    width: 48,
+    minWidth: 48,
     height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    gap: 5,
     shadowColor: '#A36E1D',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.22,
     shadowRadius: 6,
     elevation: 5,
+  },
+  fabLabel: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    maxWidth: 60,
   },
   fabBtnInactive: {
     backgroundColor: '#FFFDF7',
@@ -360,6 +381,34 @@ const styles = StyleSheet.create({
   pinCardSecondaryBtnText: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Medium',
+    color: '#7A5C38',
+  },
+  myMapEmpty: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    backgroundColor: '#FFF8EC',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+    shadowColor: '#A36E1D',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  myMapEmptyText: {
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+    marginBottom: 4,
+  },
+  myMapEmptyHint: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
     color: '#7A5C38',
   },
 });

@@ -4,7 +4,8 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import ShieldIcon from '../src/components/ShieldIcon';
 import { login, loginWithApple, loginWithGoogle, loginWithKakaoCustomToken, signUp } from '../src/api/auth';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -141,86 +142,237 @@ export default function LoginScreen() {
   const kakaoReady = !!kakaoRequest && KAKAO_CLOUD_FUNCTION_URL !== 'YOUR_FIREBASE_CLOUD_FUNCTION_URL';
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>🛡️ SHERIFF</Text>
-
-      <TextInput
-        style={styles.input}
-        placeholder="이메일"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="비밀번호"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-
-      <TouchableOpacity style={styles.loginBtn} onPress={handleLogin} disabled={loading}>
-        <Text style={styles.btnText}>{loading ? '로그인 중...' : '로그인'}</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.signupBtn} onPress={handleSignUp} disabled={loading}>
-        <Text style={styles.signupText}>계정이 없으신가요? 회원가입</Text>
-      </TouchableOpacity>
-
-      <View style={styles.dividerRow}>
-        <View style={styles.divider} />
-        <Text style={styles.dividerText}>또는</Text>
-        <View style={styles.divider} />
-      </View>
-
-      {/* 카카오 로그인 */}
-      <TouchableOpacity
-        style={[styles.socialBtn, styles.kakaoBtn, !kakaoReady && styles.disabledBtn]}
-        onPress={() => kakaoPromptAsync()}
-        disabled={!kakaoReady}
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
-      </TouchableOpacity>
+        {/* Hero */}
+        <View style={styles.hero}>
+          <ShieldIcon size={72} />
+          <Text style={styles.appName}>보안관</Text>
+          <Text style={styles.tagline}>우리 동네 진짜 이야기</Text>
+        </View>
 
-      {/* 구글 로그인 */}
-      <TouchableOpacity
-        style={[styles.socialBtn, styles.googleBtn, !googleRequest && styles.disabledBtn]}
-        onPress={() => googlePromptAsync()}
-        disabled={!googleRequest}
-      >
-        <Text style={styles.googleBtnText}>Google로 계속하기</Text>
-      </TouchableOpacity>
+        {/* Email / Password */}
+        <View style={styles.form}>
+          <TextInput
+            style={styles.input}
+            placeholder="이메일"
+            placeholderTextColor="#B89060"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            returnKeyType="next"
+            accessibilityLabel="이메일 입력"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="비밀번호"
+            placeholderTextColor="#B89060"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+            accessibilityLabel="비밀번호 입력"
+          />
 
-      {/* 애플 로그인 (iOS 전용) */}
-      {Platform.OS === 'ios' && (
-        <AppleAuthentication.AppleAuthenticationButton
-          buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-          buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-          cornerRadius={8}
-          style={styles.appleBtn}
-          onPress={handleAppleLogin}
-        />
-      )}
-    </View>
+          <TouchableOpacity
+            style={[styles.loginBtn, loading && styles.disabledBtn]}
+            onPress={handleLogin}
+            disabled={loading}
+            accessibilityLabel="로그인"
+            accessibilityRole="button"
+          >
+            <Text style={styles.loginBtnText}>{loading ? '로그인 중...' : '로그인'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.signupBtn} onPress={handleSignUp} disabled={loading}>
+            <Text style={styles.signupText}>계정이 없으신가요? <Text style={styles.signupLink}>회원가입</Text></Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>소셜 로그인</Text>
+          <View style={styles.divider} />
+        </View>
+
+        {/* Social logins */}
+        <View style={styles.socialGroup}>
+          {/* 카카오 로그인 */}
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.kakaoBtn, !kakaoReady && styles.disabledBtn]}
+            onPress={() => kakaoPromptAsync()}
+            disabled={!kakaoReady}
+            accessibilityLabel="카카오로 계속하기"
+            accessibilityRole="button"
+          >
+            <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
+          </TouchableOpacity>
+
+          {/* 구글 로그인 */}
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.googleBtn, !googleRequest && styles.disabledBtn]}
+            onPress={() => googlePromptAsync()}
+            disabled={!googleRequest}
+            accessibilityLabel="Google로 계속하기"
+            accessibilityRole="button"
+          >
+            <Text style={styles.googleBtnText}>Google로 계속하기</Text>
+          </TouchableOpacity>
+
+          {/* 애플 로그인 (iOS 전용) */}
+          {Platform.OS === 'ios' && (
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={12}
+              style={styles.appleBtn}
+              onPress={handleAppleLogin}
+            />
+          )}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 30, backgroundColor: '#FFFDF7' },
-  title: { fontSize: 40, fontFamily: 'AppleSDGothicNeo-Heavy', textAlign: 'center', marginBottom: 50, color: '#1A1108' },
-  input: { height: 50, borderWidth: 1, borderColor: '#EFE0C4', borderRadius: 12, paddingHorizontal: 15, marginBottom: 15, backgroundColor: '#FFF8EC', color: '#1A1108' },
-  loginBtn: { height: 50, backgroundColor: '#FFAC30', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  btnText: { color: '#1A1108', fontSize: 18, fontFamily: 'AppleSDGothicNeo-Bold' },
-  signupBtn: { marginTop: 16, alignItems: 'center' },
-  signupText: { color: '#7A5C38' },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
-  divider: { flex: 1, height: 1, backgroundColor: '#ddd' },
-  dividerText: { marginHorizontal: 12, color: '#999', fontSize: 13 },
-  socialBtn: { height: 50, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  disabledBtn: { opacity: 0.4 },
-  kakaoBtn: { backgroundColor: '#FEE500' },
-  kakaoBtnText: { color: '#3C1E1E', fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold' },
-  googleBtn: { backgroundColor: '#FFF8EC', borderWidth: 1, borderColor: '#EFE0C4' },
-  googleBtnText: { color: '#1A1108', fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold' },
-  appleBtn: { height: 50, width: '100%' },
+  flex: {
+    flex: 1,
+    backgroundColor: '#FFFDF7',
+  },
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 48,
+    backgroundColor: '#FFFDF7',
+  },
+  // Hero
+  hero: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  appName: {
+    fontSize: 32,
+    fontFamily: 'AppleSDGothicNeo-Heavy',
+    color: '#1A1108',
+    marginTop: 12,
+    letterSpacing: -0.5,
+  },
+  tagline: {
+    fontSize: 14,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#7A5C38',
+    marginTop: 6,
+  },
+  // Form
+  form: {
+    marginBottom: 8,
+  },
+  input: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#FFF8EC',
+    color: '#1A1108',
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+  },
+  loginBtn: {
+    height: 52,
+    backgroundColor: '#FFAC30',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+    shadowColor: '#A36E1D',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  loginBtnText: {
+    color: '#1A1108',
+    fontSize: 16,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+  },
+  signupBtn: {
+    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  signupText: {
+    color: '#7A5C38',
+    fontSize: 14,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+  },
+  signupLink: {
+    color: '#FFAC30',
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+  // Divider
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#EFE0C4',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: '#B89060',
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Medium',
+  },
+  // Social
+  socialGroup: {
+    gap: 10,
+  },
+  socialBtn: {
+    height: 52,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  disabledBtn: {
+    opacity: 0.4,
+  },
+  kakaoBtn: {
+    backgroundColor: '#FEE500',
+  },
+  kakaoBtnText: {
+    color: '#3C1E1E',
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+  googleBtn: {
+    backgroundColor: '#FFF8EC',
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+  },
+  googleBtnText: {
+    color: '#1A1108',
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+  appleBtn: {
+    height: 52,
+    width: '100%',
+  },
 });
