@@ -35,7 +35,7 @@ const PIN_COLORS: Record<MapPin['type'], string> = {
 };
 
 const MODE_CONFIG: { mode: MapMode; icon: IoniconName; color: string; iconColor: string; label: string }[] = [
-  { mode: 'basic',           icon: 'map',      color: '#4285F4', iconColor: '#fff',     label: '기본'        },
+  { mode: 'basic',           icon: 'map',      color: '#FFAC30', iconColor: '#1A1108',  label: '기본'        },
   { mode: 'my_map',          icon: 'bookmark', color: '#FFD700', iconColor: '#1A1108',  label: '내 지도'     },
   { mode: 'gathering_quest', icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108',  label: '모임·퀘스트' },
 ];
