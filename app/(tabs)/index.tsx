@@ -628,9 +628,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   modeCircleInactive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF7',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
   },
   locationFab: {
     width: 48,
@@ -650,13 +650,13 @@ const styles = StyleSheet.create({
   myMapEmpty: {
     position: 'absolute',
     left: 16, right: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF7',
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.06,

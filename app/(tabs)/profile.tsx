@@ -130,7 +130,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FFFDF7',
   },
   content: {
     paddingHorizontal: 16,
@@ -138,13 +138,13 @@ const styles = StyleSheet.create({
   },
   // Profile card
   profileCard: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF8EC',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
   },
   avatarWrap: {
     position: 'relative',
@@ -154,11 +154,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFF0D4',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
   },
   avatarEditBtn: {
     position: 'absolute',
@@ -189,13 +189,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFF0D4',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
   },
   rankText: {
     fontSize: 13,
@@ -207,8 +207,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    backgroundColor: '#FFFFFF',
+    borderColor: '#EFE0C4',
+    backgroundColor: '#FFFDF7',
   },
   editProfileBtnText: {
     fontSize: 14,
@@ -218,11 +218,11 @@ const styles = StyleSheet.create({
   // Stats
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF8EC',
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
     overflow: 'hidden',
   },
   statItem: {
@@ -253,12 +253,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF8EC',
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
   },
   verifyText: {
     flex: 1,
@@ -287,10 +287,10 @@ const styles = StyleSheet.create({
   },
   // Menu
   menuList: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF8EC',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#EFE0C4',
     overflow: 'hidden',
   },
   menuItem: {
