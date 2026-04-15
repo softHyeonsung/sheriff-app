@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
+import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
 // ── Icon map ───────────────────────────────────────────────────────────────────
@@ -109,7 +111,40 @@ function MapOverlaySheets() {
     setShowResults,
     clearPlaces,
     hideCard,
+    savedPlaces,
+    savePlace,
+    unsavePlace,
   } = useMapStore();
+
+  const firebaseUser = useAuthStore((s) => s.user);
+  const kakaoUser    = useAuthStore((s) => s.kakaoUser);
+  const currentUid   = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
+
+  const handleSavePlace = useCallback((place: PlaceResult) => {
+    savePlace(place);
+    if (currentUid) {
+      const pin = savedPlaces.find((p) => p.id === place.id)
+        ?? { id: place.id, type: 'saved' as const,
+             lat: parseFloat(place.y), lng: parseFloat(place.x),
+             title: place.place_name,
+             subtitle: place.road_address_name || place.address_name };
+      savePinToFirestore(currentUid, pin).catch((e) =>
+        console.warn('[savedPlaces] Firestore save failed:', e));
+    }
+  }, [savePlace, savedPlaces, currentUid]);
+
+  const handleUnsavePlace = useCallback((id: string) => {
+    unsavePlace(id);
+    if (currentUid) {
+      unsavePinFromFirestore(currentUid, id).catch((e) =>
+        console.warn('[savedPlaces] Firestore unsave failed:', e));
+    }
+  }, [unsavePlace, currentUid]);
+
+  const isSaved = React.useMemo(
+    () => selectedPlace ? savedPlaces.some((p) => p.id === selectedPlace.id) : false,
+    [selectedPlace, savedPlaces],
+  );
 
   const cardAnim    = useRef(new Animated.Value(0)).current;
   const resultsAnim = useRef(new Animated.Value(0)).current;
@@ -247,10 +282,21 @@ function MapOverlaySheets() {
                   <Text style={styles.detailSubtitle}>{selectedPin.subtitle}</Text>
                 )}
                 <View style={styles.detailActions}>
-                  <TouchableOpacity style={styles.detailPrimaryBtn} onPress={hideCard} activeOpacity={0.85}>
-                    <Ionicons name="arrow-forward-circle" size={18} color="#1A1108" style={{ marginRight: 6 }} />
-                    <Text style={styles.detailPrimaryBtnText}>자세히 보기</Text>
-                  </TouchableOpacity>
+                  {selectedPin.type === 'saved' ? (
+                    <TouchableOpacity
+                      style={[styles.detailPrimaryBtn, { backgroundColor: '#E05252' }]}
+                      onPress={() => { handleUnsavePlace(selectedPin.id); hideCard(); }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="bookmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={[styles.detailPrimaryBtnText, { color: '#FFFFFF' }]}>저장 취소</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity style={styles.detailPrimaryBtn} onPress={hideCard} activeOpacity={0.85}>
+                      <Ionicons name="arrow-forward-circle" size={18} color="#1A1108" style={{ marginRight: 6 }} />
+                      <Text style={styles.detailPrimaryBtnText}>자세히 보기</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity style={styles.detailSecondaryBtn} onPress={hideCard} activeOpacity={0.7}>
                     <Text style={styles.detailSecondaryBtnText}>닫기</Text>
                   </TouchableOpacity>
@@ -289,9 +335,18 @@ function MapOverlaySheets() {
                   </Text>
                 </View>
                 <View style={styles.detailActions}>
-                  <TouchableOpacity style={styles.detailPrimaryBtn} activeOpacity={0.85}>
-                    <Ionicons name="bookmark-outline" size={18} color="#1A1108" style={{ marginRight: 6 }} />
-                    <Text style={styles.detailPrimaryBtnText}>저장하기</Text>
+                  <TouchableOpacity
+                    style={styles.detailPrimaryBtn}
+                    onPress={() => isSaved ? handleUnsavePlace(selectedPlace.id) : handleSavePlace(selectedPlace)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons
+                      name={isSaved ? 'bookmark' : 'bookmark-outline'}
+                      size={18}
+                      color="#1A1108"
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={styles.detailPrimaryBtnText}>{isSaved ? '저장됨' : '저장하기'}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.detailSecondaryBtn} onPress={hideCard} activeOpacity={0.7}>
                     <Text style={styles.detailSecondaryBtnText}>닫기</Text>

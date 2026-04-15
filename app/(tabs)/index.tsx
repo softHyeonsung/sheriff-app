@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { loadSavedPins } from '../../src/api/savedPlaces';
+import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -26,7 +28,7 @@ type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const KAKAO_JS_KEY   = '589395258866fe7786bd8cbb6e152b1f';
-const KAKAO_REST_KEY = '6d840fb987f5a8ffac05946ef5e9b00c';
+const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '6d840fb987f5a8ffac05946ef5e9b00c';
 
 const PIN_COLORS: Record<MapPin['type'], string> = {
   gathering: '#FFAC30',
@@ -53,8 +55,25 @@ const SEOUL = { lat: 37.5665, lng: 126.9780 };
 const MOCK_PINS: MapPin[] = [
   { id: '1', type: 'gathering', lat: 37.5665, lng: 126.9800, title: '남산 산책 모임',   subtitle: '일요일 오전 10시 · 5/8명' },
   { id: '2', type: 'quest',     lat: 37.5690, lng: 126.9750, title: '강아지 산책 도움', subtitle: '난이도 Easy · 50P'        },
-  { id: '3', type: 'saved',     lat: 37.5640, lng: 126.9820, title: '서울역',           subtitle: '내가 저장한 장소'          },
 ];
+
+// ── WebView message type guards ────────────────────────────────────────────────
+
+function isMapPin(x: unknown): x is MapPin {
+  return typeof x === 'object' && x !== null
+    && typeof (x as MapPin).id === 'string'
+    && typeof (x as MapPin).lat === 'number'
+    && typeof (x as MapPin).lng === 'number'
+    && typeof (x as MapPin).title === 'string';
+}
+
+function isPlaceResult(x: unknown): x is PlaceResult {
+  return typeof x === 'object' && x !== null
+    && typeof (x as PlaceResult).id === 'string'
+    && typeof (x as PlaceResult).place_name === 'string'
+    && typeof (x as PlaceResult).x === 'string'
+    && typeof (x as PlaceResult).y === 'string';
+}
 
 // ── Kakao Map HTML ─────────────────────────────────────────────────────────────
 
@@ -180,6 +199,7 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
         else if (msg.type === 'SET_MODE')           { currentMode = msg.mode; renderPins(currentMode); }
         else if (msg.type === 'SHOW_PLACE_MARKERS') { showPlaceMarkers(msg.places); }
         else if (msg.type === 'CLEAR_PLACES')       { clearPlaceMarkers(); }
+        else if (msg.type === 'UPDATE_APP_PINS')    { PINS = msg.pins; renderPins(currentMode); }
       } catch (e) {}
     }
 
@@ -213,6 +233,7 @@ export default function MapScreen() {
   const webRef           = useRef<WebView>(null);
   const modeAnim         = useRef(new Animated.Value(0)).current;
   const hasLoadedNearby  = useRef(false);
+  const mapHtml          = React.useMemo(() => buildMapHTML(KAKAO_JS_KEY, MOCK_PINS), []);
 
   const [mode,     setMode]     = useState<MapMode>('basic');
   const [userLoc,  setUserLoc]  = useState<{ lat: number; lng: number } | null>(null);
@@ -220,9 +241,16 @@ export default function MapScreen() {
   const [searchText, setSearchText] = useState('');
   const [modeOpen, setModeOpen] = useState(false);
 
+  // Auth
+  const firebaseUser = useAuthStore((s) => s.user);
+  const kakaoUser    = useAuthStore((s) => s.kakaoUser);
+  const currentUid   = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
+
   // Store actions
   const {
     activeCategory,
+    selectedPin,
+    selectedPlace,
     setPlaceResults,
     setSelectedPin,
     setSelectedPlace,
@@ -231,6 +259,8 @@ export default function MapScreen() {
     registerSend,
     clearPlaces,
     hideCard,
+    savedPlaces,
+    loadSavedPlaces,
   } = useMapStore();
 
   const send = useCallback((msg: object) => {
@@ -243,6 +273,14 @@ export default function MapScreen() {
   useEffect(() => {
     registerSend(send);
   }, [send, registerSend]);
+
+  // Load saved places from Firestore on mount
+  useEffect(() => {
+    if (!currentUid) return;
+    loadSavedPins(currentUid)
+      .then(loadSavedPlaces)
+      .catch((e) => console.warn('[savedPlaces] Firestore load failed:', e));
+  }, [currentUid]);
 
   // Location tracking
   useEffect(() => {
@@ -275,6 +313,12 @@ export default function MapScreen() {
     if (mapReady) send({ type: 'SET_MODE', mode });
   }, [mode, mapReady]);
 
+  // Sync savedPlaces to WebView whenever they change
+  useEffect(() => {
+    if (!mapReady) return;
+    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...savedPlaces] });
+  }, [mapReady, savedPlaces, send]);
+
   // Auto-load nearby recommended places on first open (once map + location are both ready)
   useEffect(() => {
     if (!mapReady || !userLoc || hasLoadedNearby.current) return;
@@ -304,8 +348,8 @@ export default function MapScreen() {
     try {
       const { type, data } = JSON.parse(e.nativeEvent.data);
       if      (type === 'MAP_READY')   setMapReady(true);
-      else if (type === 'PIN_PRESS')   setSelectedPin(data as MapPin);
-      else if (type === 'PLACE_PRESS') setSelectedPlace(data as PlaceResult);
+      else if (type === 'PIN_PRESS'   && isMapPin(data))      setSelectedPin(data);
+      else if (type === 'PLACE_PRESS' && isPlaceResult(data)) setSelectedPlace(data);
       else if (type === 'MAP_PRESS')   {
         hideCard();
         send({ type: 'CLEAR_PLACES' });
@@ -376,17 +420,15 @@ export default function MapScreen() {
     send({ type: 'SHOW_PLACE_MARKERS', places: results });
   };
 
-  const visiblePinCount = MOCK_PINS.filter((p) => {
-    if (mode === 'my_map')          return p.type === 'saved';
-    if (mode === 'gathering_quest') return p.type === 'gathering' || p.type === 'quest';
-    return true;
-  }).length;
+  const visiblePinCount = mode === 'my_map'
+    ? savedPlaces.length
+    : MOCK_PINS.filter((p) => {
+        if (mode === 'gathering_quest') return p.type === 'gathering' || p.type === 'quest';
+        return true;
+      }).length;
 
   const center     = userLoc ?? SEOUL;
   const bottomRowY = insets.bottom + 100;
-
-  // Read-only from store for empty state
-  const { selectedPin, selectedPlace } = useMapStore();
 
   return (
     <View style={styles.container}>
@@ -394,7 +436,7 @@ export default function MapScreen() {
       <WebView
         ref={webRef}
         style={StyleSheet.absoluteFillObject}
-        source={{ html: buildMapHTML(KAKAO_JS_KEY, MOCK_PINS) }}
+        source={{ html: mapHtml }}
         originWhitelist={['https://*', 'about:blank']}
         javaScriptEnabled
         domStorageEnabled
