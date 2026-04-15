@@ -210,8 +210,9 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
 
 export default function MapScreen() {
   const insets  = useSafeAreaInsets();
-  const webRef  = useRef<WebView>(null);
-  const modeAnim = useRef(new Animated.Value(0)).current;
+  const webRef           = useRef<WebView>(null);
+  const modeAnim         = useRef(new Animated.Value(0)).current;
+  const hasLoadedNearby  = useRef(false);
 
   const [mode,     setMode]     = useState<MapMode>('basic');
   const [userLoc,  setUserLoc]  = useState<{ lat: number; lng: number } | null>(null);
@@ -273,6 +274,30 @@ export default function MapScreen() {
   useEffect(() => {
     if (mapReady) send({ type: 'SET_MODE', mode });
   }, [mode, mapReady]);
+
+  // Auto-load nearby recommended places on first open (once map + location are both ready)
+  useEffect(() => {
+    if (!mapReady || !userLoc || hasLoadedNearby.current) return;
+    hasLoadedNearby.current = true;
+
+    const loc = userLoc;
+    (async () => {
+      const base = `https://dapi.kakao.com/v2/local/search/category.json`
+        + `?x=${loc.lng}&y=${loc.lat}&sort=distance`;
+
+      const [attractions, restaurants, cafes] = await Promise.all([
+        kakaoLocalSearch(`${base}&category_group_code=AT4&radius=1500&size=8`),
+        kakaoLocalSearch(`${base}&category_group_code=FD6&radius=500&size=5`),
+        kakaoLocalSearch(`${base}&category_group_code=CE7&radius=500&size=4`),
+      ]);
+
+      const places = [...attractions, ...restaurants, ...cafes];
+      if (places.length === 0) return;
+
+      setPlaceResults(places);
+      send({ type: 'SHOW_PLACE_MARKERS', places });
+    })();
+  }, [mapReady, userLoc]);
 
   // WebView messages
   const onMessage = useCallback((e: WebViewMessageEvent) => {
