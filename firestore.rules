@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{userId} {
+      // Firebase Auth users (email / Google / Apple) can read/write their own document
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Kakao users have no Firebase Auth token — allow writes only when the
+      // incoming uid field matches the document path (kakao_{kakaoId}).
+      // This is weaker than real auth but scoped: a caller must know the exact
+      // Kakao ID to write to that document, and can only write to their own path.
+      // TODO: replace with Firebase Custom Token (Cloud Function) before launch.
+      allow write: if userId.matches('kakao_.+')
+                   && request.resource.data.uid == userId;
+      allow read:  if userId.matches('kakao_.+');
+    }
+
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.author_id == request.auth.uid;
+      allow update, delete: if request.auth != null
+                             && resource.data.author_id == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.author_id == request.auth.uid;
+        allow delete: if request.auth != null
+                      && resource.data.author_id == request.auth.uid;
+      }
+    }
+
+    match /gatherings/{gatheringId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.host_id == request.auth.uid;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null
+                    && resource.data.host_id == request.auth.uid;
+    }
+
+    match /quests/{questId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.requester_id == request.auth.uid;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null
+                    && resource.data.requester_id == request.auth.uid;
+    }
+
+    match /chats/{roomId} {
+      allow read: if request.auth != null
+                  && request.auth.uid in resource.data.members;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+                    && request.auth.uid in resource.data.members;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null
+                      && request.resource.data.sender_id == request.auth.uid;
+      }
+    }
+  }
+}

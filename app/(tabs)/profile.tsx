@@ -1,9 +1,13 @@
 // 경로: app/(tabs)/profile.tsx
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { logout } from '../../src/api/auth';
+import { clearKakaoSession } from '../../src/api/kakaoAuth';
 import ShieldIcon from '../../src/components/ShieldIcon';
+import { useAuthStore } from '../../src/store/authStore';
 
 const STAT_ITEMS = [
   { label: '포인트', value: '0', icon: 'star' as const },
@@ -19,7 +23,32 @@ const MENU_ITEMS = [
 ];
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
+  const insets       = useSafeAreaInsets();
+  const router       = useRouter();
+  const setUser      = useAuthStore((s) => s.setUser);
+  const setKakaoUser = useAuthStore((s) => s.setKakaoUser);
+
+  const handleLogout = () => {
+    Alert.alert('로그아웃', '정말 로그아웃 하시겠어요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '로그아웃',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await logout();            // Firebase sign-out
+            await clearKakaoSession(); // clear AsyncStorage
+          } catch (e) {
+            console.warn('[auth] logout error:', e);
+          } finally {
+            setKakaoUser(null);        // clear Zustand regardless
+            setUser(null);
+            router.replace('/login');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <ScrollView
@@ -84,6 +113,7 @@ export default function ProfileScreen() {
             style={[styles.menuItem, idx < MENU_ITEMS.length - 1 && styles.menuItemBorder]}
             accessibilityRole="button"
             accessibilityLabel={item.label}
+            onPress={item.label === '로그아웃' ? handleLogout : undefined}
           >
             <Ionicons name={item.icon} size={20} color={item.label === '로그아웃' ? '#E05252' : '#A36E1D'} />
             <Text style={[styles.menuLabel, item.label === '로그아웃' && styles.menuLabelDanger]}>
@@ -100,7 +130,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#FFFFFF',
   },
   content: {
     paddingHorizontal: 16,
@@ -108,13 +138,13 @@ const styles = StyleSheet.create({
   },
   // Profile card
   profileCard: {
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#F5F5F5',
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
   },
   avatarWrap: {
     position: 'relative',
@@ -124,11 +154,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#FFF0D4',
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
   },
   avatarEditBtn: {
     position: 'absolute',
@@ -141,7 +171,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#FFF8EC',
+    borderColor: '#F5F5F5',
   },
   nickname: {
     fontSize: 20,
@@ -159,13 +189,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFF0D4',
+    backgroundColor: '#F0F0F0',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
   },
   rankText: {
     fontSize: 13,
@@ -177,8 +207,8 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
-    backgroundColor: '#FFFDF7',
+    borderColor: '#E5E5E5',
+    backgroundColor: '#FFFFFF',
   },
   editProfileBtnText: {
     fontSize: 14,
@@ -188,11 +218,11 @@ const styles = StyleSheet.create({
   // Stats
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#F5F5F5',
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
     overflow: 'hidden',
   },
   statItem: {
@@ -202,7 +232,7 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     borderRightWidth: 1,
-    borderRightColor: '#EFE0C4',
+    borderRightColor: '#E5E5E5',
   },
   statIcon: {
     marginBottom: 4,
@@ -223,12 +253,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#F5F5F5',
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
   },
   verifyText: {
     flex: 1,
@@ -257,10 +287,10 @@ const styles = StyleSheet.create({
   },
   // Menu
   menuList: {
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#F5F5F5',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
     overflow: 'hidden',
   },
   menuItem: {
@@ -272,7 +302,7 @@ const styles = StyleSheet.create({
   },
   menuItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#EFE0C4',
+    borderBottomColor: '#E5E5E5',
   },
   menuLabel: {
     flex: 1,

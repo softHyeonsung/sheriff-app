@@ -8,36 +8,46 @@ import {
     signInWithEmailAndPassword,
     signOut
 } from 'firebase/auth';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { AuthProvider } from '../types/user';
 
 // Firestore 유저 문서 생성 헬퍼 (소셜 로그인에서도 재사용)
-const createUserDoc = async (uid: string, email: string, provider: AuthProvider) => {
+// New users get a full document with createdAt.
+// Existing users only update mutable fields — createdAt is never overwritten.
+const createUserDoc = async (uid: string, email: string, provider: AuthProvider, nickname?: string) => {
   const userRef = doc(db, 'users', uid);
-  await setDoc(userRef, {
-    uid,
-    email,
-    nickname: email.split('@')[0],
-    provider,
-    profile_img: '',
-    points: 0,
-    sheriff_score: 0,
-    badge_list: [],
-    saved_places: [],
-    followers: [],
-    following: [],
-    rank_level: 'rookie',
-    is_home_verified: false,
-    createdAt: serverTimestamp(),
-  }, { merge: true }); // merge: true → 소셜 재로그인 시 기존 데이터 보존
+  const snap    = await getDoc(userRef);
+
+  if (snap.exists()) {
+    // Re-login: update only fields that may change between sessions
+    await setDoc(userRef, { email, provider }, { merge: true });
+  } else {
+    // First sign-up: write full document
+    await setDoc(userRef, {
+      uid,
+      email,
+      nickname: nickname ?? email.split('@')[0],
+      provider,
+      profile_img: '',
+      points: 0,
+      sheriff_score: 0,
+      badge_list: [],
+      saved_places: [],
+      followers: [],
+      following: [],
+      rank_level: 'rookie',
+      is_home_verified: false,
+      createdAt: serverTimestamp(),
+    });
+  }
 };
 
 // 1. 회원가입
-export const signUp = async (email: string, pass: string) => {
+export const signUp = async (email: string, pass: string, nickname?: string) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await createUserDoc(userCredential.user.uid, email, 'email');
+    await createUserDoc(userCredential.user.uid, email, 'email', nickname);
     return userCredential.user;
   } catch (error: any) {
     throw { code: error.code ?? 'unknown', message: error.message ?? String(error) };

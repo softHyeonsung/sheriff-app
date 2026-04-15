@@ -1,258 +1,503 @@
 // 경로: app/(tabs)/index.tsx
-// Map Screen — Hybrid layout: full-bleed map + amber gradient wash + floating mode toggle + sliding pin card
-// TODO (MAP-01): Replace react-native-maps (Google/Apple) with Kakao Map WebView for KR production.
-//   Pattern: mapProvider = userCountry === 'KR' ? KakaoMapWebView : <MapView provider={PROVIDER_GOOGLE} />
+// Map Screen — Kakao Map WebView + search + place search + mode circles
 
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type MapMode = 'basic' | 'my_map' | 'gathering_quest';
 
-interface MapPin {
-  id: string;
-  type: 'gathering' | 'quest' | 'saved';
-  coordinate: { latitude: number; longitude: number };
-  title: string;
-  subtitle?: string;
-}
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
+const KAKAO_JS_KEY   = '589395258866fe7786bd8cbb6e152b1f';
+const KAKAO_REST_KEY = '6d840fb987f5a8ffac05946ef5e9b00c';
+
 const PIN_COLORS: Record<MapPin['type'], string> = {
-  gathering: '#FFAC30',  // amber — DESIGN.md § Pin colors
-  quest: '#A36E1D',       // leather brown
-  saved: '#4CAF6A',       // success green
+  gathering: '#FFAC30',
+  quest:     '#A36E1D',
+  saved:     '#4CAF6A',
 };
 
-const PIN_LABELS: Record<MapPin['type'], string> = {
-  gathering: '모임',
-  quest: '퀘스트',
-  saved: '저장',
-};
-
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
-
-// Mode FAB config — Ionicons (no emoji — DESIGN.md: emoji renders inconsistently on Android)
-const MODE_CONFIG: { mode: MapMode; label: string; icon: IoniconName; color: string; iconColor: string }[] = [
-  { mode: 'basic',           label: '기본',       icon: 'map',      color: '#4285F4', iconColor: '#fff'    },
-  { mode: 'my_map',          label: '내 지도',    icon: 'bookmark', color: '#FFD700', iconColor: '#1A1108' },
-  { mode: 'gathering_quest', label: '모임·퀘스트', icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108' },
+const MODE_CONFIG: { mode: MapMode; icon: IoniconName; color: string; iconColor: string; label: string }[] = [
+  { mode: 'basic',           icon: 'map',      color: '#4285F4', iconColor: '#fff',     label: '기본'        },
+  { mode: 'my_map',          icon: 'bookmark', color: '#FFD700', iconColor: '#1A1108',  label: '내 지도'     },
+  { mode: 'gathering_quest', icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108',  label: '모임·퀘스트' },
 ];
 
-// Fallback center: Seoul (when location permission denied — DESIGN.md § Location)
-const SEOUL = { latitude: 37.5665, longitude: 126.9780 };
+const PLACE_CATEGORIES: { key: string; label: string; code: string }[] = [
+  { key: 'food',     label: '음식점', code: 'FD6' },
+  { key: 'cafe',     label: '카페',   code: 'CE7' },
+  { key: 'conv',     label: '편의점', code: 'CS2' },
+  { key: 'subway',   label: '지하철', code: 'SW8' },
+  { key: 'pharmacy', label: '약국',   code: 'PM9' },
+];
 
-// TODO (MAP-01 cold-start): Replace with KTO (한국관광공사) API pins fetched on mount.
-// These are mock pins until Firestore queries (gatherings, quests, saved_places) are wired up.
+const SEOUL = { lat: 37.5665, lng: 126.9780 };
+
 const MOCK_PINS: MapPin[] = [
-  {
-    id: '1',
-    type: 'gathering',
-    coordinate: { latitude: 37.5665, longitude: 126.9800 },
-    title: '남산 산책 모임',
-    subtitle: '일요일 오전 10시 · 5/8명',
-  },
-  {
-    id: '2',
-    type: 'quest',
-    coordinate: { latitude: 37.5690, longitude: 126.9750 },
-    title: '강아지 산책 도움',
-    subtitle: '난이도 Easy · 50P',
-  },
-  {
-    id: '3',
-    type: 'saved',
-    coordinate: { latitude: 37.5640, longitude: 126.9820 },
-    title: '서울역',
-    subtitle: '내가 저장한 장소',
-  },
+  { id: '1', type: 'gathering', lat: 37.5665, lng: 126.9800, title: '남산 산책 모임',   subtitle: '일요일 오전 10시 · 5/8명' },
+  { id: '2', type: 'quest',     lat: 37.5690, lng: 126.9750, title: '강아지 산책 도움', subtitle: '난이도 Easy · 50P'        },
+  { id: '3', type: 'saved',     lat: 37.5640, lng: 126.9820, title: '서울역',           subtitle: '내가 저장한 장소'          },
 ];
+
+// ── Kakao Map HTML ─────────────────────────────────────────────────────────────
+
+const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #map { width: 100%; height: 100%; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var PINS = ${JSON.stringify(pins)};
+    var PIN_COLORS = ${JSON.stringify(PIN_COLORS)};
+    var currentMode = 'basic';
+    var markers = [];
+    var placeMarkers = [];
+    var map;
+
+    // ── My location dot ───────────────────────────────────────────────────────
+    var myLocationMarker = null;
+
+    function makeMyLocationSrc() {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">'
+        + '<circle cx="12" cy="12" r="10" fill="rgba(66,133,244,0.18)"/>'
+        + '<circle cx="12" cy="12" r="6" fill="#4285F4" stroke="white" stroke-width="2"/>'
+        + '</svg>';
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    function updateMyLocation(lat, lng) {
+      var pos = new kakao.maps.LatLng(lat, lng);
+      if (!myLocationMarker) {
+        var img = new kakao.maps.MarkerImage(makeMyLocationSrc(), new kakao.maps.Size(24, 24),
+          { offset: new kakao.maps.Point(12, 12) });
+        myLocationMarker = new kakao.maps.Marker({ position: pos, map: map, image: img, zIndex: 10 });
+      } else {
+        myLocationMarker.setPosition(pos);
+      }
+    }
+
+    function makeMarkerSrc(color) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">'
+        + '<path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z"'
+        + ' fill="' + color + '" stroke="white" stroke-width="1.5"/>'
+        + '<circle cx="14" cy="14" r="5" fill="white"/>'
+        + '</svg>';
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    function makePlaceMarkerSrc(color) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28" viewBox="0 0 22 28">'
+        + '<path d="M11 0C4.92 0 0 4.92 0 11c0 8.25 11 17 11 17S22 19.25 22 11C22 4.92 17.08 0 11 0z"'
+        + ' fill="' + color + '" stroke="white" stroke-width="1.2"/>'
+        + '<circle cx="11" cy="11" r="4" fill="white"/>'
+        + '</svg>';
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
+    // ── App pins ──────────────────────────────────────────────────────────────
+    function renderPins(mode) {
+      markers.forEach(function(m) { m.setMap(null); });
+      markers = [];
+      var filtered = PINS.filter(function(pin) {
+        if (mode === 'my_map')          return pin.type === 'saved';
+        if (mode === 'gathering_quest') return pin.type === 'gathering' || pin.type === 'quest';
+        return true;
+      });
+      filtered.forEach(function(pin) {
+        var img = new kakao.maps.MarkerImage(makeMarkerSrc(PIN_COLORS[pin.type]), new kakao.maps.Size(28, 36));
+        var marker = new kakao.maps.Marker({
+          position: new kakao.maps.LatLng(pin.lat, pin.lng),
+          map: map, image: img, title: pin.title,
+        });
+        (function(p) {
+          kakao.maps.event.addListener(marker, 'click', function() { send('PIN_PRESS', p); });
+        })(pin);
+        markers.push(marker);
+      });
+    }
+
+    // ── Place markers ─────────────────────────────────────────────────────────
+    function clearPlaceMarkers() {
+      placeMarkers.forEach(function(m) { m.setMap(null); });
+      placeMarkers = [];
+    }
+
+    function showPlaceMarkers(places) {
+      clearPlaceMarkers();
+      if (!places || places.length === 0) return;
+      var bounds = new kakao.maps.LatLngBounds();
+      places.forEach(function(place) {
+        var img = new kakao.maps.MarkerImage(makePlaceMarkerSrc('#5B82DB'), new kakao.maps.Size(22, 28));
+        var marker = new kakao.maps.Marker({
+          position: new kakao.maps.LatLng(parseFloat(place.y), parseFloat(place.x)),
+          map: map, image: img, title: place.place_name,
+        });
+        bounds.extend(new kakao.maps.LatLng(parseFloat(place.y), parseFloat(place.x)));
+        (function(p) {
+          kakao.maps.event.addListener(marker, 'click', function() { send('PLACE_PRESS', p); });
+        })(place);
+        placeMarkers.push(marker);
+      });
+      if (placeMarkers.length > 0) map.setBounds(bounds, 80, 80, 80, 80);
+    }
+
+    // ── RN ↔ WebView ─────────────────────────────────────────────────────────
+    function send(type, data) {
+      if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: type, data: data }));
+    }
+
+    function handleRNMessage(raw) {
+      try {
+        var msg = JSON.parse(raw);
+        if      (msg.type === 'SET_LOCATION')      { map.setCenter(new kakao.maps.LatLng(msg.lat, msg.lng)); updateMyLocation(msg.lat, msg.lng); }
+        else if (msg.type === 'MY_LOCATION')        { updateMyLocation(msg.lat, msg.lng); }
+        else if (msg.type === 'CENTER')             { map.panTo(new kakao.maps.LatLng(msg.lat, msg.lng)); }
+        else if (msg.type === 'SET_MODE')           { currentMode = msg.mode; renderPins(currentMode); }
+        else if (msg.type === 'SHOW_PLACE_MARKERS') { showPlaceMarkers(msg.places); }
+        else if (msg.type === 'CLEAR_PLACES')       { clearPlaceMarkers(); }
+      } catch (e) {}
+    }
+
+    document.addEventListener('message', function(e) { handleRNMessage(e.data); });
+    window.addEventListener('message',   function(e) { handleRNMessage(e.data); });
+
+    // ── Map init ──────────────────────────────────────────────────────────────
+    function initMap() {
+      var container = document.getElementById('map');
+      map = new kakao.maps.Map(container, {
+        center: new kakao.maps.LatLng(${SEOUL.lat}, ${SEOUL.lng}),
+        level: 5,
+      });
+      kakao.maps.event.addListener(map, 'click', function() { send('MAP_PRESS', null); });
+      renderPins(currentMode);
+      send('MAP_READY', null);
+    }
+  </script>
+  <script type="text/javascript"
+    src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${apiKey}&autoload=false">
+  </script>
+  <script>kakao.maps.load(initMap);</script>
+</body>
+</html>
+`;
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export default function MapScreen() {
-  const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<MapMode>('basic');
-  const [selectedPin, setSelectedPin] = useState<MapPin | null>(null);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const cardAnim = useRef(new Animated.Value(0)).current;
-  const mapRef = useRef<MapView>(null);
+  const insets  = useSafeAreaInsets();
+  const webRef  = useRef<WebView>(null);
+  const modeAnim = useRef(new Animated.Value(0)).current;
 
-  // Request location on mount; fall back to Seoul if denied
+  const [mode,     setMode]     = useState<MapMode>('basic');
+  const [userLoc,  setUserLoc]  = useState<{ lat: number; lng: number } | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [modeOpen, setModeOpen] = useState(false);
+
+  // Store actions
+  const {
+    activeCategory,
+    setPlaceResults,
+    setSelectedPin,
+    setSelectedPlace,
+    setShowResults,
+    setActiveCategory,
+    registerSend,
+    clearPlaces,
+    hideCard,
+  } = useMapStore();
+
+  const send = useCallback((msg: object) => {
+    webRef.current?.injectJavaScript(
+      `handleRNMessage(${JSON.stringify(JSON.stringify(msg))}); true;`
+    );
+  }, []);
+
+  // Register send callback with store so overlay can send WebView commands
   useEffect(() => {
+    registerSend(send);
+  }, [send, registerSend]);
+
+  // Location tracking
+  useEffect(() => {
+    let subscriber: Location.LocationSubscription | null = null;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setUserLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+
+      const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const firstPos = { lat: first.coords.latitude, lng: first.coords.longitude };
+      setUserLoc(firstPos);
+      if (mapReady) send({ type: 'SET_LOCATION', ...firstPos });
+
+      subscriber = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, distanceInterval: 10, timeInterval: 5000 },
+        (loc) => {
+          const pos = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          setUserLoc(pos);
+          send({ type: 'MY_LOCATION', ...pos });
+        }
+      );
     })();
-  }, []);
 
-  const showCard = (pin: MapPin) => {
-    setSelectedPin(pin);
-    Animated.spring(cardAnim, {
-      toValue: 1,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
+    return () => { subscriber?.remove(); };
+  }, [mapReady]);
+
+  // Mode sync
+  useEffect(() => {
+    if (mapReady) send({ type: 'SET_MODE', mode });
+  }, [mode, mapReady]);
+
+  // WebView messages
+  const onMessage = useCallback((e: WebViewMessageEvent) => {
+    try {
+      const { type, data } = JSON.parse(e.nativeEvent.data);
+      if      (type === 'MAP_READY')   setMapReady(true);
+      else if (type === 'PIN_PRESS')   setSelectedPin(data as MapPin);
+      else if (type === 'PLACE_PRESS') setSelectedPlace(data as PlaceResult);
+      else if (type === 'MAP_PRESS')   {
+        hideCard();
+        send({ type: 'CLEAR_PLACES' });
+        clearPlaces();
+      }
+    } catch {}
+  }, [hideCard, clearPlaces, send, setSelectedPin, setSelectedPlace]);
+
+  // ── Kakao Local REST API ────────────────────────────────────────────────────
+  const kakaoLocalSearch = async (url: string): Promise<PlaceResult[]> => {
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` },
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return (json.documents ?? []) as PlaceResult[];
+    } catch {
+      return [];
+    }
   };
 
-  const hideCard = () => {
-    Animated.timing(cardAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-    }).start(() => setSelectedPin(null));
+  // Mode dropdown
+  const toggleModeDropdown = () => {
+    const toValue = modeOpen ? 0 : 1;
+    setModeOpen(!modeOpen);
+    Animated.spring(modeAnim, { toValue, useNativeDriver: true, tension: 60, friction: 10 }).start();
   };
 
-  const visiblePins = MOCK_PINS.filter((pin) => {
-    if (mode === 'my_map') return pin.type === 'saved';
-    if (mode === 'gathering_quest') return pin.type === 'gathering' || pin.type === 'quest';
+  const selectMode = (m: MapMode) => {
+    setMode(m);
+    hideCard();
+    setModeOpen(false);
+    Animated.timing(modeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+  };
+
+  // Category tap
+  const handleCategoryPress = async (cat: typeof PLACE_CATEGORIES[number]) => {
+    if (activeCategory === cat.key) {
+      setActiveCategory(null);
+      setPlaceResults([]);
+      setShowResults(false);
+      send({ type: 'CLEAR_PLACES' });
+      return;
+    }
+    setActiveCategory(cat.key);
+    setShowResults(false);
+    const loc = userLoc ?? SEOUL;
+    const url = `https://dapi.kakao.com/v2/local/search/category.json`
+      + `?category_group_code=${cat.code}&x=${loc.lng}&y=${loc.lat}&radius=1000&sort=distance&size=15`;
+    const results = await kakaoLocalSearch(url);
+    setPlaceResults(results);
+    if (results.length > 0) setShowResults(true);
+    send({ type: 'SHOW_PLACE_MARKERS', places: results });
+  };
+
+  // Keyword search
+  const handleSearch = async () => {
+    const q = searchText.trim();
+    if (!q) return;
+    setActiveCategory(null);
+    const loc = userLoc ?? SEOUL;
+    const url = `https://dapi.kakao.com/v2/local/search/keyword.json`
+      + `?query=${encodeURIComponent(q)}&x=${loc.lng}&y=${loc.lat}&radius=5000&sort=distance&size=15`;
+    const results = await kakaoLocalSearch(url);
+    setPlaceResults(results);
+    if (results.length > 0) setShowResults(true);
+    send({ type: 'SHOW_PLACE_MARKERS', places: results });
+  };
+
+  const visiblePinCount = MOCK_PINS.filter((p) => {
+    if (mode === 'my_map')          return p.type === 'saved';
+    if (mode === 'gathering_quest') return p.type === 'gathering' || p.type === 'quest';
     return true;
-  });
+  }).length;
 
-  const cardTranslateY = cardAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [240, 0],
-  });
+  const center     = userLoc ?? SEOUL;
+  const bottomRowY = insets.bottom + 100;
 
-  const center = userLocation ?? SEOUL;
+  // Read-only from store for empty state
+  const { selectedPin, selectedPlace } = useMapStore();
 
   return (
     <View style={styles.container}>
-      {/* Full-bleed map */}
-      <MapView
-        ref={mapRef}
+      {/* Kakao Map WebView */}
+      <WebView
+        ref={webRef}
         style={StyleSheet.absoluteFillObject}
-        provider={PROVIDER_GOOGLE}
-        showsUserLocation
-        showsMyLocationButton={false}
-        initialRegion={{ ...center, latitudeDelta: 0.02, longitudeDelta: 0.02 }}
-        onPress={hideCard}
-      >
-        {visiblePins.map((pin) => (
-          <Marker
-            key={pin.id}
-            coordinate={pin.coordinate}
-            pinColor={PIN_COLORS[pin.type]}
-            onPress={() => showCard(pin)}
-          />
-        ))}
-      </MapView>
+        source={{ html: buildMapHTML(KAKAO_JS_KEY, MOCK_PINS) }}
+        originWhitelist={['https://*', 'about:blank']}
+        javaScriptEnabled
+        domStorageEnabled
+        onMessage={onMessage}
+        scrollEnabled={false}
+      />
 
-      {/* Amber gradient wash — bottom 35% (Hybrid variant C element) */}
+      {/* Amber gradient wash */}
       <LinearGradient
         colors={['transparent', 'rgba(255,172,48,0.10)', 'rgba(255,172,48,0.20)']}
         style={styles.gradient}
         pointerEvents="none"
       />
 
-      {/* Mode FAB stack (vertical, right side) — active on top, inactive below */}
-      <View style={[styles.fabStack, { top: insets.top + 80 }]}>
-        {[
-          MODE_CONFIG.find((c) => c.mode === mode)!,
-          ...MODE_CONFIG.filter((c) => c.mode !== mode),
-        ].map((cfg, idx) => {
-          const isActive = idx === 0;
-          return (
-            <TouchableOpacity
-              key={cfg.mode}
-              style={[
-                styles.fabBtn,
-                isActive
-                  ? { backgroundColor: cfg.color }
-                  : styles.fabBtnInactive,
-              ]}
-              onPress={() => {
-                setMode(cfg.mode);
-                hideCard();
-              }}
-              activeOpacity={0.8}
-              accessibilityLabel={cfg.label}
-            >
-              <Ionicons
-                name={cfg.icon}
-                size={isActive ? 22 : 18}
-                color={isActive ? cfg.iconColor : '#8A6030'}
-              />
-              {isActive && (
-                <Text style={[styles.fabLabel, { color: cfg.iconColor }]} numberOfLines={1}>
-                  {cfg.label}
-                </Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+      {/* ── Search bar + directions button ── */}
+      <View style={[styles.searchRow, { top: insets.top + 12 }]}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color="#B89060" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="장소, 모임 검색"
+            placeholderTextColor="#B89060"
+            value={searchText}
+            onChangeText={setSearchText}
+            returnKeyType="search"
+            onSubmitEditing={handleSearch}
+            clearButtonMode="while-editing"
+            accessibilityLabel="지도 검색"
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.directionsBtn}
+          activeOpacity={0.85}
+          accessibilityLabel="길찾기"
+        >
+          <Ionicons name="navigate" size={20} color="#FFFFFF" />
+          <Text style={styles.directionsBtnText}>길찾기</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Current location FAB */}
-      <TouchableOpacity
-        style={[styles.locationFab, { bottom: insets.bottom + 96 }]}
-        onPress={() => {
-          mapRef.current?.animateToRegion(
-            { ...center, latitudeDelta: 0.015, longitudeDelta: 0.015 },
-            400,
-          );
-        }}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="locate" size={20} color="#FFAC30" />
-      </TouchableOpacity>
+      {/* ── Category chips ── */}
+      <View style={[styles.categoryRow, { top: insets.top + 72 }]}>
+        {PLACE_CATEGORIES.map((cat) => (
+          <TouchableOpacity
+            key={cat.key}
+            style={[styles.categoryChip, activeCategory === cat.key && styles.categoryChipActive]}
+            onPress={() => handleCategoryPress(cat)}
+            activeOpacity={0.8}
+            accessibilityLabel={cat.label}
+          >
+            <Text style={[styles.categoryChipText, activeCategory === cat.key && styles.categoryChipTextActive]}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ── Bottom row: mode dropdown (left) + locate (right) ── */}
+      <View style={[styles.bottomRow, { bottom: bottomRowY }]}>
+
+        {/* Mode dropdown */}
+        <View style={styles.modeDropdownWrap}>
+          {MODE_CONFIG.filter((c) => c.mode !== mode).map((cfg, idx) => {
+            const translateY = modeAnim.interpolate({
+              inputRange:  [0, 1],
+              outputRange: [0, -((idx + 1) * 56)],
+            });
+            const opacity = modeAnim.interpolate({
+              inputRange:  [0, 0.4, 1],
+              outputRange: [0, 0,   1],
+            });
+            const scale = modeAnim.interpolate({
+              inputRange:  [0, 1],
+              outputRange: [0.7, 1],
+            });
+            return (
+              <Animated.View
+                key={cfg.mode}
+                style={[
+                  styles.modeCircleAbsolute,
+                  { transform: [{ translateY }, { scale }], opacity },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[styles.modeCircle, styles.modeCircleInactive]}
+                  onPress={() => selectMode(cfg.mode)}
+                  activeOpacity={0.8}
+                  accessibilityLabel={cfg.label}
+                >
+                  <Ionicons name={cfg.icon} size={26} color="#8A6030" />
+                </TouchableOpacity>
+              </Animated.View>
+            );
+          })}
+
+          {/* Current mode circle */}
+          {(() => {
+            const cfg = MODE_CONFIG.find((c) => c.mode === mode)!;
+            return (
+              <TouchableOpacity
+                style={[styles.modeCircle, { backgroundColor: cfg.color }]}
+                onPress={toggleModeDropdown}
+                activeOpacity={0.85}
+                accessibilityLabel={`${cfg.label} 모드 선택`}
+              >
+                <Ionicons name={cfg.icon} size={26} color={cfg.iconColor} />
+              </TouchableOpacity>
+            );
+          })()}
+        </View>
+
+        {/* Locate FAB */}
+        <TouchableOpacity
+          style={styles.locationFab}
+          onPress={() => send({ type: 'CENTER', ...center })}
+          activeOpacity={0.8}
+          accessibilityLabel="현재 위치로 이동"
+        >
+          <Ionicons name="locate" size={26} color="#FFAC30" />
+        </TouchableOpacity>
+      </View>
 
       {/* 내 지도 empty state */}
-      {mode === 'my_map' && visiblePins.length === 0 && (
-        <View style={[styles.myMapEmpty, { bottom: insets.bottom + 80 }]}>
+      {mode === 'my_map' && visiblePinCount === 0 && !selectedPin && !selectedPlace && (
+        <View style={[styles.myMapEmpty, { bottom: bottomRowY + 60 }]}>
           <Text style={styles.myMapEmptyText}>아직 저장한 장소가 없어요</Text>
           <Text style={styles.myMapEmptyHint}>지도에서 핀을 탭하면 저장할 수 있어요</Text>
         </View>
-      )}
-
-      {/* Pin detail card — slides up from bottom */}
-      {selectedPin && (
-        <Animated.View
-          style={[
-            styles.pinCard,
-            // bottom: tab bar (64) + gap (8) + safe area + 8 margin = insets.bottom + 80
-            { bottom: insets.bottom + 80, transform: [{ translateY: cardTranslateY }] },
-          ]}
-        >
-          {/* Type badge */}
-          <View
-            style={[styles.pinTypeBadge, { backgroundColor: PIN_COLORS[selectedPin.type] }]}
-          >
-            <Text style={styles.pinTypeBadgeText}>{PIN_LABELS[selectedPin.type]}</Text>
-          </View>
-
-          <Text style={styles.pinCardTitle}>{selectedPin.title}</Text>
-          {selectedPin.subtitle && (
-            <Text style={styles.pinCardSubtitle}>{selectedPin.subtitle}</Text>
-          )}
-
-          <View style={styles.pinCardActions}>
-            <TouchableOpacity style={styles.pinCardPrimaryBtn} onPress={hideCard}>
-              <Text style={styles.pinCardPrimaryBtnText}>자세히 보기</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pinCardSecondaryBtn} onPress={hideCard}>
-              <Text style={styles.pinCardSecondaryBtnText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
       )}
     </View>
   );
@@ -261,142 +506,160 @@ export default function MapScreen() {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   gradient: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
+    left: 0, right: 0, bottom: 0,
     height: '35%',
   },
-  fabStack: {
+
+  // Search
+  searchRow: {
     position: 'absolute',
-    right: 16,
-    zIndex: 10,
+    left: 16, right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+    zIndex: 60,
   },
-  fabBtn: {
-    minWidth: 48,
+  searchBar: {
+    flex: 1,
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  searchIcon: { marginRight: 8 },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#1A1108',
+    paddingVertical: 0,
+  },
+  directionsBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#FFAC30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 2,
+    shadowColor: '#A36E1D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  directionsBtnText: {
+    fontSize: 10,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#FFFFFF',
+  },
+
+  // Category chips
+  categoryRow: {
+    position: 'absolute',
+    left: 0, right: 0,
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+    zIndex: 60,
+  },
+  categoryChip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  categoryChipActive: { backgroundColor: '#FFAC30' },
+  categoryChipText: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-Medium',
+    color: '#7A5C38',
+  },
+  categoryChipTextActive: {
+    color: '#1A1108',
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+
+  // Bottom row
+  bottomRow: {
+    position: 'absolute',
+    left: 28, right: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 60,
+  },
+  modeDropdownWrap: {
+    width: 48,
+    height: 48,
+  },
+  modeCircleAbsolute: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  modeCircle: {
+    width: 48,
     height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    gap: 5,
-    shadowColor: '#A36E1D',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.20,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  fabLabel: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    maxWidth: 60,
-  },
-  fabBtnInactive: {
-    backgroundColor: '#FFFDF7',
+  modeCircleInactive: {
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
   },
   locationFab: {
-    position: 'absolute',
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFDF7',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#A36E1D',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
     elevation: 3,
   },
-  pinCard: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: '#FFF8EC',
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#A36E1D',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  pinTypeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    marginBottom: 10,
-  },
-  pinTypeBadgeText: {
-    fontSize: 11,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#1A1108',
-  },
-  pinCardTitle: {
-    fontSize: 17,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-    marginBottom: 4,
-  },
-  pinCardSubtitle: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
-    marginBottom: 16,
-  },
-  pinCardActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  pinCardPrimaryBtn: {
-    flex: 1,
-    backgroundColor: '#FFAC30',
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: 'center',
-  },
-  pinCardPrimaryBtnText: {
-    fontSize: 15,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
-  pinCardSecondaryBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#EFE0C4',
-    alignItems: 'center',
-  },
-  pinCardSecondaryBtnText: {
-    fontSize: 15,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
-  },
+
+  // My map empty
   myMapEmpty: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    backgroundColor: '#FFF8EC',
+    left: 16, right: 16,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
-    shadowColor: '#A36E1D',
+    borderColor: '#E5E5E5',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 4,
   },

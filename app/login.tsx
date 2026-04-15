@@ -1,35 +1,37 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { login, loginWithApple, loginWithGoogle } from '../src/api/auth';
+import { KAKAO_REST_API_KEY, loginWithKakao } from '../src/api/kakaoAuth';
+import GoogleIcon from '../src/components/GoogleIcon';
+import KakaoIcon from '../src/components/KakaoIcon';
 import ShieldIcon from '../src/components/ShieldIcon';
-import { login, loginWithApple, loginWithGoogle, loginWithKakaoCustomToken, signUp } from '../src/api/auth';
+import { useAuthStore } from '../src/store/authStore';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// TODO: Firebase 콘솔 > Authentication > Google > 웹 클라이언트 ID 입력
-const GOOGLE_WEB_CLIENT_ID = 'YOUR_GOOGLE_WEB_CLIENT_ID';
-const GOOGLE_IOS_CLIENT_ID = 'YOUR_GOOGLE_IOS_CLIENT_ID';
+// Google 웹 클라이언트 ID — Firebase Console > Authentication > Google > 웹 클라이언트 ID
+const GOOGLE_WEB_CLIENT_ID     = '847237699912-bebdqk9u4eqf9188eu3bt9tppt3e1aqr.apps.googleusercontent.com';
+const GOOGLE_IOS_CLIENT_ID     = '847237699912-q7o4uh29rsjl39i8en10jd00d3ensj89.apps.googleusercontent.com';
 const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_GOOGLE_ANDROID_CLIENT_ID';
-
-// TODO: https://developers.kakao.com > 앱 > REST API 키 입력
-const KAKAO_REST_API_KEY = 'YOUR_KAKAO_REST_API_KEY';
-
-// TODO: Firebase Cloud Functions 배포 후 URL 입력 (카카오 authorization code → custom token 교환)
-const KAKAO_CLOUD_FUNCTION_URL = 'YOUR_FIREBASE_CLOUD_FUNCTION_URL';
 
 const kakaoDiscovery = {
   authorizationEndpoint: 'https://kauth.kakao.com/oauth/authorize',
-  tokenEndpoint: 'https://kauth.kakao.com/oauth/token',
+  tokenEndpoint:         'https://kauth.kakao.com/oauth/token',
 };
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const router       = useRouter();
+  const setKakaoUser = useAuthStore((s) => s.setKakaoUser);
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
 
   const kakaoRedirectUri = useMemo(
     () => AuthSession.makeRedirectUri({ scheme: 'sheriffapp' }),
@@ -37,78 +39,62 @@ export default function LoginScreen() {
   );
 
   // Google OAuth
-  // responseType 'id_token' only works on iOS/web. Android requires 'code' + PKCE.
-  // TODO (P1): Switch to responseType:'code' + server-side token exchange for Android support.
-  // For now, Google login is iOS/web only.
   const [googleRequest, googleResponse, googlePromptAsync] = Google.useAuthRequest({
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID,
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    responseType: 'id_token',
+    iosClientId:     GOOGLE_IOS_CLIENT_ID,
+    webClientId:     GOOGLE_WEB_CLIENT_ID,
   });
 
   // Kakao OAuth
   const [kakaoRequest, kakaoResponse, kakaoPromptAsync] = AuthSession.useAuthRequest(
     {
-      clientId: KAKAO_REST_API_KEY,
+      clientId:    KAKAO_REST_API_KEY,
       redirectUri: kakaoRedirectUri,
-      scopes: ['profile_nickname', 'profile_image', 'account_email'],
+      scopes:      ['profile_nickname', 'profile_image', 'account_email'],
     },
     kakaoDiscovery
   );
 
   // Google 응답 처리
   useEffect(() => {
-    if (googleResponse?.type === 'success') {
-      const { id_token } = googleResponse.params;
-      if (id_token) {
-        loginWithGoogle(id_token).catch((e) => Alert.alert('Google 로그인 실패', e.message));
-      }
-    }
+    if (googleResponse?.type !== 'success') return;
+    const { id_token } = googleResponse.params;
+    if (!id_token) return;
+
+    setLoading(true);
+    loginWithGoogle(id_token)
+      .catch((e) => Alert.alert('Google 로그인 실패', e.message))
+      .finally(() => setLoading(false));
   }, [googleResponse]);
 
-  // 카카오 응답 처리 — authorization code를 Cloud Function으로 전송해 custom token 수령
+  // 카카오 응답 처리
   useEffect(() => {
-    if (kakaoResponse?.type === 'success') {
-      const { code } = kakaoResponse.params;
-      fetch(KAKAO_CLOUD_FUNCTION_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, redirectUri: kakaoRedirectUri }),
+    if (kakaoResponse?.type !== 'success') return;
+    const { code } = kakaoResponse.params;
+    if (!code) return;
+
+    setLoading(true);
+    loginWithKakao(code, kakaoRedirectUri)
+      .then((kakaoUser) => {
+        setKakaoUser(kakaoUser);
+        router.replace('/(tabs)');
       })
-        .then((res) => res.json())
-        .then((data) => loginWithKakaoCustomToken(data.firebaseToken))
-        .catch((e) => Alert.alert('카카오 로그인 실패', String(e)));
-    }
+      .catch((e) => Alert.alert('카카오 로그인 실패', String(e.message ?? e)))
+      .finally(() => setLoading(false));
   }, [kakaoResponse]);
 
-  const validateEmailPassword = (): boolean => {
+  const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('오류', '이메일과 비밀번호를 입력해주세요.');
-      return false;
+      return;
     }
-    return true;
-  };
-
-  const handleLogin = async () => {
-    if (!validateEmailPassword()) return;
     setLoading(true);
     try {
       await login(email, password);
-    } catch (error: any) {
-      Alert.alert('로그인 실패', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignUp = async () => {
-    if (!validateEmailPassword()) return;
-    setLoading(true);
-    try {
-      await signUp(email, password);
-    } catch (error: any) {
-      Alert.alert('회원가입 실패', error.message);
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('로그인 실패', '이메일이나 비밀번호가 일치하지 않습니다.');
     } finally {
       setLoading(false);
     }
@@ -117,12 +103,9 @@ export default function LoginScreen() {
   const handleAppleLogin = async () => {
     try {
       const randomBytes = await Crypto.getRandomBytesAsync(32);
-      const rawNonce = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
-      const nonce = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        rawNonce
-      );
-      const credential = await AppleAuthentication.signInAsync({
+      const rawNonce    = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const nonce       = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+      const credential  = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
@@ -139,7 +122,8 @@ export default function LoginScreen() {
     }
   };
 
-  const kakaoReady = !!kakaoRequest && KAKAO_CLOUD_FUNCTION_URL !== 'YOUR_FIREBASE_CLOUD_FUNCTION_URL';
+  const kakaoReady  = !!kakaoRequest  && KAKAO_REST_API_KEY    !== 'YOUR_KAKAO_REST_API_KEY';
+  const googleReady = !!googleRequest && GOOGLE_WEB_CLIENT_ID  !== 'YOUR_GOOGLE_WEB_CLIENT_ID';
 
   return (
     <KeyboardAvoidingView
@@ -193,7 +177,7 @@ export default function LoginScreen() {
             <Text style={styles.loginBtnText}>{loading ? '로그인 중...' : '로그인'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.signupBtn} onPress={handleSignUp} disabled={loading}>
+          <TouchableOpacity style={styles.signupBtn} onPress={() => router.push('/signup')} accessibilityRole="button">
             <Text style={styles.signupText}>계정이 없으신가요? <Text style={styles.signupLink}>회원가입</Text></Text>
           </TouchableOpacity>
         </View>
@@ -205,9 +189,9 @@ export default function LoginScreen() {
           <View style={styles.divider} />
         </View>
 
-        {/* Social logins */}
+        {/* Social buttons */}
         <View style={styles.socialGroup}>
-          {/* 카카오 로그인 */}
+          {/* 카카오 */}
           <TouchableOpacity
             style={[styles.socialBtn, styles.kakaoBtn, !kakaoReady && styles.disabledBtn]}
             onPress={() => kakaoPromptAsync()}
@@ -215,29 +199,35 @@ export default function LoginScreen() {
             accessibilityLabel="카카오로 계속하기"
             accessibilityRole="button"
           >
+            <View style={styles.socialBtnIcon}><KakaoIcon size={22} /></View>
             <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
           </TouchableOpacity>
 
-          {/* 구글 로그인 */}
+          {/* 구글 */}
           <TouchableOpacity
-            style={[styles.socialBtn, styles.googleBtn, !googleRequest && styles.disabledBtn]}
+            style={[styles.socialBtn, styles.googleBtn, !googleReady && styles.disabledBtn]}
             onPress={() => googlePromptAsync()}
-            disabled={!googleRequest}
+            disabled={!googleReady}
             accessibilityLabel="Google로 계속하기"
             accessibilityRole="button"
           >
+            <View style={styles.socialBtnIcon}><GoogleIcon size={22} /></View>
             <Text style={styles.googleBtnText}>Google로 계속하기</Text>
           </TouchableOpacity>
 
-          {/* 애플 로그인 (iOS 전용) */}
+          {/* 애플 (iOS 전용) */}
           {Platform.OS === 'ios' && (
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={12}
-              style={styles.appleBtn}
+            <TouchableOpacity
+              style={[styles.socialBtn, styles.appleBtn]}
               onPress={handleAppleLogin}
-            />
+              accessibilityLabel="Apple로 계속하기"
+              accessibilityRole="button"
+            >
+              <View style={styles.socialBtnIcon}>
+                <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={styles.appleBtnText}>Apple로 계속하기</Text>
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
@@ -248,16 +238,15 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 28,
     paddingVertical: 48,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#FFFFFF',
   },
-  // Hero
   hero: {
     alignItems: 'center',
     marginBottom: 40,
@@ -275,18 +264,17 @@ const styles = StyleSheet.create({
     color: '#7A5C38',
     marginTop: 6,
   },
-  // Form
   form: {
     marginBottom: 8,
   },
   input: {
     height: 52,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
     borderRadius: 14,
     paddingHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#F5F5F5',
     color: '#1A1108',
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',
@@ -323,7 +311,6 @@ const styles = StyleSheet.create({
     color: '#FFAC30',
     fontFamily: 'AppleSDGothicNeo-SemiBold',
   },
-  // Divider
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -332,7 +319,7 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#EFE0C4',
+    backgroundColor: '#E5E5E5',
   },
   dividerText: {
     marginHorizontal: 12,
@@ -340,15 +327,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Medium',
   },
-  // Social
   socialGroup: {
     gap: 10,
   },
   socialBtn: {
     height: 52,
     borderRadius: 14,
-    justifyContent: 'center',
+    flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  socialBtnIcon: {
+    width: 28,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   disabledBtn: {
     opacity: 0.4,
@@ -357,22 +349,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE500',
   },
   kakaoBtnText: {
+    flex: 1,
+    textAlign: 'center',
     color: '#3C1E1E',
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
+    marginRight: 28,
   },
   googleBtn: {
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#E5E5E5',
   },
   googleBtnText: {
+    flex: 1,
+    textAlign: 'center',
     color: '#1A1108',
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
+    marginRight: 28,
   },
   appleBtn: {
-    height: 52,
-    width: '100%',
+    backgroundColor: '#000000',
+  },
+  appleBtnText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    marginRight: 28,
   },
 });
