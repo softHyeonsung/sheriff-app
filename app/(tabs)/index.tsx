@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   modeCircleInactive: {
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#F0F0F0',
     borderWidth: 1,
     borderColor: '#EFE0C4',
   },
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
   myMapEmpty: {
     position: 'absolute',
     left: 16, right: 16,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#F0F0F0',
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,

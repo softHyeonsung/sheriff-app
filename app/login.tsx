@@ -238,14 +238,14 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#F0F0F0',
   },
   container: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 28,
     paddingVertical: 48,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#F0F0F0',
   },
   hero: {
     alignItems: 'center',

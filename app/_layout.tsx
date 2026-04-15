@@ -72,7 +72,7 @@ export default function RootLayout() {
   // 폰트 로딩 + 인증 상태 확인이 모두 완료될 때까지 스피너 표시
   if (!isReady || !fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFDF7' }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F0F0' }}>
         <ActivityIndicator size="large" color="#FFAC30" />
       </View>
     );

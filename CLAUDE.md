@@ -352,6 +352,12 @@ All font choices, colors, spacing, and aesthetic direction are defined there.
 Do not deviate without explicit user approval.
 In QA mode, flag any code that does not match DESIGN.md.
 
+Key token (keep in sync with DESIGN.md):
+- Screen background: `#F0F0F0`
+- Card surface: `#FFF8EC`
+- Elevated chips: `#FFF0D4`
+- Border: `#EFE0C4`
+
 ---
 
 ## 8. Basic 탭 지도 UI 상세 설계

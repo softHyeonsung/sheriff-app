@@ -130,7 +130,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#F0F0F0',
   },
   content: {
     paddingHorizontal: 16,
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#EFE0C4',
-    backgroundColor: '#FFFDF7',
+    backgroundColor: '#F0F0F0',
   },
   editProfileBtnText: {
     fontSize: 14,
