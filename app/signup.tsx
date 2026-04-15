@@ -211,12 +211,6 @@ const styles = StyleSheet.create({
     color: '#1A1108',
     marginTop: 12,
   },
-  subtitle: {
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
-    marginTop: 6,
-  },
   form: {
     marginBottom: 24,
   },
