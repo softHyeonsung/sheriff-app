@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#B89060',
+    color: '#8A6030',
     letterSpacing: 0.8,
     marginBottom: 12,
     textTransform: 'uppercase',
