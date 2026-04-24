@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EFE0C4',
+    borderBottomColor: '#D4D4D4',
   },
   searchBar: {
     height: 44,
@@ -482,6 +482,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
   },
   searchIcon: { marginRight: 6 },
   searchInput: {
