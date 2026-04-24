@@ -378,7 +378,7 @@ const card = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F5F5F5',
+    borderTopColor: '#EFE0C4',
     marginTop: 10,
     gap: 4,
   },
