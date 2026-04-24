@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
   },
   resultSep: {
     height: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
     marginLeft: 60,
   },
 
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },

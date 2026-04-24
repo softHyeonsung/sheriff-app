@@ -181,14 +181,14 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
   },
   container: {
     flexGrow: 1,
     paddingHorizontal: 28,
     paddingTop: 56,
     paddingBottom: 40,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
   },
   backBtn: {
     position: 'absolute',
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
     marginBottom: 16,
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#FFFFFF',
     color: '#1A1108',
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',

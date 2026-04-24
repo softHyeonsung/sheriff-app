@@ -873,7 +873,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
   },
   areaDropItemActive: {
-    backgroundColor: '#FFF0D4',
+    backgroundColor: '#FFFFFF',
   },
   areaDropItemText: {
     fontSize: 13,
@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   modeCircleInactive: {
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#EFE0C4',
   },
@@ -1019,7 +1019,7 @@ const styles = StyleSheet.create({
   myMapEmpty: {
     position: 'absolute',
     left: 16, right: 16,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 20,
