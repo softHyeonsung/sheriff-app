@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
   searchWrap: {
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0F0F0',
     borderBottomWidth: 1,
     borderBottomColor: '#EFE0C4',
   },
