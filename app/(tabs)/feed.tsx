@@ -266,8 +266,11 @@ function PostCard({ post }: { post: MockPost }) {
           <Ionicons name="chatbubble-outline" size={19} color="#B89060" />
           <Text style={card.actionText}>{post.comments}</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={card.actionBtn} accessibilityLabel="공유">
+          <Ionicons name="share-outline" size={19} color="#B89060" />
+        </TouchableOpacity>
 
-        {/* Right — save / share */}
+        {/* Right — save */}
         <View style={card.actionsRight}>
           {post.locationPin && (
             <TouchableOpacity
@@ -280,9 +283,6 @@ function PostCard({ post }: { post: MockPost }) {
           )}
           <TouchableOpacity style={card.actionBtn} accessibilityLabel="북마크">
             <Ionicons name="bookmark-outline" size={19} color="#B89060" />
-          </TouchableOpacity>
-          <TouchableOpacity style={card.actionBtn} accessibilityLabel="공유">
-            <Ionicons name="share-outline" size={19} color="#B89060" />
           </TouchableOpacity>
         </View>
       </View>
