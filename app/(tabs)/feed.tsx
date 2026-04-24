@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Path, Svg } from 'react-native-svg';
 import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
 import { useAuthStore } from '../../src/store/authStore';
 import { PlaceResult, useMapStore } from '../../src/store/mapStore';
@@ -107,6 +108,18 @@ const MOCK_POSTS: MockPost[] = [
     contentType: '관광지',
   },
 ];
+
+// ── LassoIcon (Lucide lasso path, react-native-svg) ───────────────────────────
+
+function LassoIcon({ size = 19, color = '#B89060' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M7 22a5 5 0 0 1-2-4" />
+      <Path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1" />
+      <Path d="M5 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+    </Svg>
+  );
+}
 
 // ── PostCard ───────────────────────────────────────────────────────────────────
 
@@ -213,11 +226,7 @@ function PostCard({ post }: { post: MockPost }) {
             onPress={toggleSavePlace}
             accessibilityLabel={isSaved ? '내 지도에서 제거' : '내 지도에 저장'}
           >
-            <Ionicons
-              name={isSaved ? 'lasso' : 'lasso-outline'}
-              size={19}
-              color={isSaved ? '#FFAC30' : '#B89060'}
-            />
+            <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#B89060'} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
