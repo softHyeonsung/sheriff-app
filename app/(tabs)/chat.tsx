@@ -8,7 +8,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 96 }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 96 }]}>
       <View style={styles.emptyState}>
         <View style={styles.iconWrap}>
           <Ionicons name="send" size={40} color="#FFAC30" />
