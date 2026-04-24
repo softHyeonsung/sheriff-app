@@ -45,10 +45,10 @@
 - **Primary (amber):** `#FFAC30` — CTAs, active tab states, sheriff badge fill, progress bars
 - **Dark amber (leather):** `#A36E1D` — secondary text, icon fills, badge outlines, depth
 - **Gold (reward):** `#FFD700` — sparingly: badge stars, score highlights, rank-up moments
-- **Background:** `#F0F0F0` — light neutral gray
-- **Surface (cards):** `#FFF8EC` — card backgrounds, map overlays, list item backgrounds
-- **Surface 2 (elevated):** `#FFF0D4` — category tags, chip backgrounds, hover states
-- **Border:** `#EFE0C4` — dividers, card borders, input borders
+- **Background:** `#FFFFFF` — white
+- **Surface (cards):** `#FFFFFF` — card backgrounds, map overlays, list item backgrounds
+- **Surface 2 (elevated):** `#F5F5F5` — input field backgrounds, category tags, chip backgrounds
+- **Border:** `#D4D4D4` — dividers, card borders, input borders
 - **Text primary:** `#1A1108` — near-black with warm undertone (NOT #000000)
 - **Text muted:** `#7A5C38` — metadata, timestamps, secondary labels
 - **Text light:** `#B89060` — placeholder text, disabled states
@@ -150,7 +150,7 @@
 
 **Empty state design rule (applies to all):** Warm emoji anchor + one-line description in `#7A5C38` + primary CTA button in amber. Never plain "No items found."
 
-**Skeleton loading rule:** All skeletons use `#FFF0D4` base with `#FFE4A0` shimmer pulse (amber-family, not gray). 200ms animation cycle.
+**Skeleton loading rule:** All skeletons use `#F5F5F5` base with `#E8E8E8` shimmer pulse. 200ms animation cycle.
 
 ## Navigation Architecture
 
@@ -158,7 +158,7 @@
 ```
 지도  |  피드  |  모임  |  채팅  |  프로필
 ```
-- Active color: `#FFAC30`. Inactive: `#B89060`. Background: `#F0F0F0`.
+- Active color: `#FFAC30`. Inactive: `#B89060`. Background: `#FFFFFF`.
 - Icons: use react-native-vector-icons or custom SVG — NOT FontAwesome (too generic)
 - 퀘스트 has NO dedicated top-level tab — quests are discovered on the map
 
@@ -169,7 +169,7 @@ The map is the home screen and the primary discovery surface. A segmented toggle
 ```
 
 **Toggle component spec (custom pill tabs):**
-- Container: `backgroundColor: '#F0F0F0'`, `borderRadius: 9999`, `padding: 3`, `flexDirection: 'row'`
+- Container: `backgroundColor: '#F5F5F5'`, `borderRadius: 9999`, `padding: 3`, `flexDirection: 'row'`
 - Outer wrap: floating card over map, `position: 'absolute'`, `top: 56`, centered horizontally, `marginHorizontal: 16`
 - Each pill: `paddingHorizontal: 14`, `paddingVertical: 7`, `borderRadius: 9999`
 - Active pill: `backgroundColor: '#FFAC30'`, text `color: '#1A1108'`, `fontWeight: '600'`
@@ -193,7 +193,7 @@ Pin colors:
 채팅:            headerShown: true, title: '채팅'
 프로필:          headerShown: true, title: username string (dynamic)
 ```
-All visible headers: `backgroundColor: '#F0F0F0'`, `borderBottomColor: '#EFE0C4'`, title `color: '#1A1108'` Pretendard Bold 18px.
+All visible headers: `backgroundColor: '#FFFFFF'`, `borderBottomColor: '#D4D4D4'`, title `color: '#1A1108'` Pretendard Bold 18px.
 
 ### Post Image Aspect Ratio
 - Feed posts: **4:3** (standard for Korean SNS — wider than 16:9, feels social not cinematic)
@@ -243,10 +243,10 @@ const ShieldStar = ({ size = 32 }: { size?: number }) => (
 | Pair | Ratio | Pass? |
 |---|---|---|
 | `#FFAC30` on `#1A1108` (amber button) | 4.6:1 | ✅ AA |
-| `#1A1108` on `#F0F0F0` (body text) | 17.3:1 | ✅ AAA |
-| `#7A5C38` on `#F0F0F0` (muted text) | 5.1:1 | ✅ AA |
-| `#8A6030` on `#F0F0F0` (inactive tab — corrected) | 5.4:1 | ✅ AA |
-| `#B89060` on `#F0F0F0` (original inactive tab) | 2.8:1 | ❌ Fail — do not use for text |
+| `#1A1108` on `#FFFFFF` (body text) | 19.3:1 | ✅ AAA |
+| `#7A5C38` on `#FFFFFF` (muted text) | 5.9:1 | ✅ AA |
+| `#8A6030` on `#FFFFFF` (inactive tab) | 6.3:1 | ✅ AA |
+| `#B89060` on `#FFFFFF` (placeholder text) | 3.2:1 | ❌ Fail — do not use for body text |
 
 ### Screen Reader (React Native)
 - All interactive elements: `accessibilityLabel` in Korean
@@ -269,6 +269,7 @@ const ShieldStar = ({ size = 32 }: { size?: number }) => (
 | 2026-04-07 | AppleSDGothicNeo TTF loaded explicitly via useFonts | Files already in assets/fonts/. Loaded explicitly = works on Android too. Pretendard not needed. |
 | 2026-04-06 | Background #FFFDF7 not #FFFFFF | Warm off-white carries the golden-hour moodboard feel through every screen. Every competitor uses pure white. |
 | 2026-04-15 | Background changed to #F0F0F0 | User preference: light neutral gray background. Cards (#FFF8EC) and chips (#FFF0D4) now appear warmer/lighter than the bg, creating card elevation through color contrast. |
+| 2026-04-24 | Background changed to #FFFFFF, input bg #F5F5F5, border #D4D4D4 | User preference: clean white base. Input fields use #F5F5F5 (balanced gray) to define field boundaries without heaviness. Borders unified to #D4D4D4 across all inputs and cards. |
 | 2026-04-06 | Sheriff badge as living UI element | 6-point star fills in with score progress. Makes earning feel real, not just a number incrementing. |
 | 2026-04-06 | Map as home screen (not feed) | Primary differentiation from 당근/Daangn. The moodboard is geographically grounded — map-first reinforces that. |
 | 2026-04-06 | Amber #FFAC30 as single primary | Directly from moodboard. All three moodboard colors are amber family — system coherence comes from one primary with light/dark variants. |
