@@ -326,8 +326,8 @@ const card = StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: 220,
-    backgroundColor: '#F5F5F5',
+    aspectRatio: 4 / 3,
+    backgroundColor: '#FFF0D4',
   },
   content: {
     fontSize: 14,
