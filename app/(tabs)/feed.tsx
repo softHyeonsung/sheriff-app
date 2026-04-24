@@ -347,7 +347,7 @@ const card = StyleSheet.create({
   tag: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#4285F4',
+    color: '#A36E1D',
   },
   locationRow: {
     flexDirection: 'row',
