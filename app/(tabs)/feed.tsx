@@ -109,6 +109,54 @@ const MOCK_POSTS: MockPost[] = [
   },
 ];
 
+// ── Mock stories ──────────────────────────────────────────────────────────────
+
+interface MockStory {
+  id: string;
+  nickname: string;
+  avatarSeed: string;
+  isSheriff: boolean;
+  isOwn?: boolean;
+}
+
+const MOCK_STORIES: MockStory[] = [
+  { id: 'own', nickname: '내 스토리', avatarSeed: 'me', isOwn: true, isSheriff: false },
+  { id: 's1', nickname: '동네탐험가', avatarSeed: 'explorer', isSheriff: true },
+  { id: 's2', nickname: '맛집헌터', avatarSeed: 'food', isSheriff: false },
+  { id: 's3', nickname: '주말산책러', avatarSeed: 'walk', isSheriff: true },
+  { id: 's4', nickname: '야경수집가', avatarSeed: 'night', isSheriff: true },
+  { id: 's5', nickname: '문화인', avatarSeed: 'culture', isSheriff: false },
+];
+
+function StoryStrip() {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={story.strip}
+      contentContainerStyle={story.stripContent}
+    >
+      {MOCK_STORIES.map((s) => (
+        <TouchableOpacity key={s.id} style={story.item} activeOpacity={0.8}>
+          <View style={[story.avatarWrap, s.isSheriff && story.avatarSheriff]}>
+            {s.isOwn ? (
+              <View style={story.addWrap}>
+                <Ionicons name="add" size={26} color="#FFAC30" />
+              </View>
+            ) : (
+              <Image
+                source={{ uri: `https://picsum.photos/seed/${s.avatarSeed}/80/80` }}
+                style={story.avatar}
+              />
+            )}
+          </View>
+          <Text style={story.label} numberOfLines={1}>{s.nickname}</Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+}
+
 // ── LassoIcon (Lucide lasso path, react-native-svg) ───────────────────────────
 
 function LassoIcon({ size = 19, color = '#B89060' }: { size?: number; color?: string }) {
@@ -275,6 +323,9 @@ export default function FeedScreen() {
           />
         </View>
       </View>
+
+      {/* ── Stories ── */}
+      <StoryStrip />
 
       {/* ── Content ── */}
       <ScrollView
@@ -570,5 +621,53 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 6,
+  },
+});
+
+// ── Story styles ──────────────────────────────────────────────────────────────
+
+const story = StyleSheet.create({
+  strip: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#D4D4D4',
+  },
+  stripContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 16,
+  },
+  item: {
+    alignItems: 'center',
+    width: 64,
+  },
+  avatarWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: '#D4D4D4',
+    overflow: 'hidden',
+    marginBottom: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+  },
+  avatarSheriff: {
+    borderColor: '#FFAC30',
+    borderWidth: 2.5,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+  },
+  addWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 11,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#7A5C38',
+    textAlign: 'center',
   },
 });
