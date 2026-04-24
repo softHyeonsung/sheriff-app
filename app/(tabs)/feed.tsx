@@ -264,8 +264,8 @@ export default function FeedScreen() {
 
 const card = StyleSheet.create({
   wrap: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    backgroundColor: '#FFF8EC',
+    borderRadius: 16,
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#EFE0C4',
