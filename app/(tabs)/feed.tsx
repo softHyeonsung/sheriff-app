@@ -387,7 +387,8 @@ const card = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 12,
+    minHeight: 44,
   },
   actionText: {
     fontSize: 13,
