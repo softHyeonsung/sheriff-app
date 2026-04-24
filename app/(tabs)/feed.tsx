@@ -257,6 +257,7 @@ function PostCard({ post }: { post: MockPost }) {
 
       {/* Actions */}
       <View style={card.actions}>
+        {/* Left — social */}
         <TouchableOpacity style={card.actionBtn} onPress={toggleLike}>
           <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? '#E05252' : '#B89060'} />
           <Text style={[card.actionText, liked && card.actionTextLiked]}>{likeCount}</Text>
@@ -265,24 +266,25 @@ function PostCard({ post }: { post: MockPost }) {
           <Ionicons name="chatbubble-outline" size={19} color="#B89060" />
           <Text style={card.actionText}>{post.comments}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={card.actionBtn}>
-          <Ionicons name="bookmark-outline" size={19} color="#B89060" />
-        </TouchableOpacity>
-        {post.locationPin && (
-          <TouchableOpacity
-            style={[card.actionBtn, { marginLeft: 'auto' }]}
-            onPress={toggleSavePlace}
-            accessibilityLabel={isSaved ? '내 지도에서 제거' : '내 지도에 저장'}
-          >
-            <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#B89060'} />
+
+        {/* Right — save / share */}
+        <View style={card.actionsRight}>
+          {post.locationPin && (
+            <TouchableOpacity
+              style={card.actionBtn}
+              onPress={toggleSavePlace}
+              accessibilityLabel={isSaved ? '내 지도에서 제거' : '내 지도에 저장'}
+            >
+              <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#B89060'} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity style={card.actionBtn} accessibilityLabel="북마크">
+            <Ionicons name="bookmark-outline" size={19} color="#B89060" />
           </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          style={post.locationPin ? card.actionBtn : [card.actionBtn, { marginLeft: 'auto' }]}
-          accessibilityLabel="공유"
-        >
-          <Ionicons name="share-outline" size={19} color="#B89060" />
-        </TouchableOpacity>
+          <TouchableOpacity style={card.actionBtn} accessibilityLabel="공유">
+            <Ionicons name="share-outline" size={19} color="#B89060" />
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -496,6 +498,12 @@ const card = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#EFE0C4',
     marginTop: 10,
+    gap: 4,
+  },
+  actionsRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 'auto',
     gap: 4,
   },
   actionBtn: {
