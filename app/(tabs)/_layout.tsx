@@ -392,19 +392,19 @@ export default function TabLayout() {
         {/* 3. 모임 */}
         <Tabs.Screen
           name="community"
-          options={{ title: '모임' }}
+          options={{ title: '모임', headerShown: false }}
         />
 
         {/* 4. 채팅 */}
         <Tabs.Screen
           name="chat"
-          options={{ title: '채팅' }}
+          options={{ title: '채팅', headerShown: false }}
         />
 
         {/* 5. 프로필 */}
         <Tabs.Screen
           name="profile"
-          options={{ title: '프로필' }}
+          options={{ title: '프로필', headerShown: false }}
         />
       </Tabs>
 
