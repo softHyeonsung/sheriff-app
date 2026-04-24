@@ -510,7 +510,7 @@ const card = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     paddingVertical: 12,
     minHeight: 44,
   },
