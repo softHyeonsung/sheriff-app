@@ -161,7 +161,7 @@ function PostCard({ post }: { post: MockPost }) {
   };
 
   return (
-    <View style={card.wrap}>
+    <View style={[card.wrap, post.author.isSheriff && card.wrapSheriff]}>
       {/* Author row */}
       <View style={card.authorRow}>
         <View style={[card.avatar, post.author.isSheriff && card.avatarSheriff]}>
@@ -326,12 +326,15 @@ export default function FeedScreen() {
 
 const card = StyleSheet.create({
   wrap: {
-    backgroundColor: '#FFF8EC',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     overflow: 'hidden',
+  },
+  wrapSheriff: {
+    borderColor: '#FFAC30',
   },
   authorRow: {
     flexDirection: 'row',
