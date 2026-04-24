@@ -225,7 +225,7 @@ export default function CreatePostScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F0F0F0' },
+  root: { flex: 1, backgroundColor: '#FFFFFF' },
 
   // Header
   header: {

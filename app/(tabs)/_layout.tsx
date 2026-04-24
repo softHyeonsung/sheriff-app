@@ -374,6 +374,7 @@ export default function TabLayout() {
           headerTintColor: '#1A1108',
           headerTitleStyle: { fontFamily: 'AppleSDGothicNeo-Bold', fontSize: 18 },
           headerShadowVisible: false,
+          contentStyle: { backgroundColor: '#FFFFFF' },
         }}
       >
         {/* 1. 지도 — full-bleed, no header */}

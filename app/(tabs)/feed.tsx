@@ -466,7 +466,7 @@ const card = StyleSheet.create({
 // ── Screen styles ──────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F0F0' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
 
   searchWrap: {
     paddingHorizontal: 16,
