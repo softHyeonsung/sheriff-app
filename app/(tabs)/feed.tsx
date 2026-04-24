@@ -12,6 +12,9 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
+import { useAuthStore } from '../../src/store/authStore';
+import { PlaceResult, useMapStore } from '../../src/store/mapStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -22,6 +25,7 @@ interface MockPost {
   content: string;
   imageUri?: string;
   location: { name: string; distance: string };
+  locationPin?: PlaceResult; // if set, enables lariat (save to my map) button
   tags: string[];
   likes: number;
   comments: number;
@@ -39,6 +43,7 @@ const MOCK_POSTS: MockPost[] = [
     content: '경복궁 야간 개장 다녀왔어요! 조명이 진짜 너무 예뻤고 한복 입고 가면 입장료 무료에요 🏯 주말엔 사람이 많으니까 평일 추천!\n#경복궁 #야간개장 #서울관광 #한복',
     imageUri: 'https://picsum.photos/seed/palace/400/300',
     location: { name: '경복궁', distance: '1.2km' },
+    locationPin: { id: 'place-gyeongbokgung', place_name: '경복궁', category_name: '관광지', address_name: '서울 종로구 사직로 161', road_address_name: '서울 종로구 사직로 161', x: '126.9770', y: '37.5796' },
     tags: ['#경복궁', '#야간개장', '#서울관광', '#한복'],
     likes: 42,
     comments: 8,
@@ -52,6 +57,7 @@ const MOCK_POSTS: MockPost[] = [
     content: '광장시장 빈대떡이 너무 맛있어서 두 판 먹었어요 😋 육회도 신선하고 가격도 착해서 자주 오는 편인데 오늘따라 더 맛있는 느낌? 점심시간 피해서 오면 자리도 잘 나요.\n#광장시장 #빈대떡 #육회 #서울맛집',
     imageUri: 'https://picsum.photos/seed/market/400/300',
     location: { name: '광장시장', distance: '850m' },
+    locationPin: { id: 'place-gwangjang', place_name: '광장시장', category_name: '음식점', address_name: '서울 종로구 창경궁로 88', road_address_name: '서울 종로구 창경궁로 88', x: '126.9998', y: '37.5702' },
     tags: ['#광장시장', '#빈대떡', '#서울맛집'],
     likes: 31,
     comments: 5,
@@ -65,6 +71,7 @@ const MOCK_POSTS: MockPost[] = [
     content: '한강공원 여의도 쪽 벚꽃이 이번 주가 절정이에요 🌸 아침 일찍 오면 사람 적고 조용히 즐길 수 있어요. 자전거 대여소도 바로 옆에 있으니 자전거 타면서 구경하는 것도 좋아요!\n#한강공원 #여의도벚꽃 #봄나들이',
     imageUri: 'https://picsum.photos/seed/river/400/300',
     location: { name: '한강공원 여의도지구', distance: '2.3km' },
+    locationPin: { id: 'place-hangang-yeouido', place_name: '한강공원 여의도지구', category_name: '관광지', address_name: '서울 영등포구 여의도동', road_address_name: '서울 영등포구 여의도동', x: '126.9337', y: '37.5285' },
     tags: ['#한강공원', '#여의도벚꽃', '#봄나들이'],
     likes: 87,
     comments: 14,
@@ -78,6 +85,7 @@ const MOCK_POSTS: MockPost[] = [
     content: '국립중앙박물관 상설전시 처음 가봤는데 무료인 게 믿기지 않을 정도로 규모가 어마어마해요. 청자·백자 특별전도 같이 열리고 있으니 지금 가보시길 추천! 주차도 무료\n#국립중앙박물관 #문화생활 #무료전시',
     imageUri: 'https://picsum.photos/seed/museum/400/300',
     location: { name: '국립중앙박물관', distance: '3.1km' },
+    locationPin: { id: 'place-national-museum', place_name: '국립중앙박물관', category_name: '문화시설', address_name: '서울 용산구 서빙고로 137', road_address_name: '서울 용산구 서빙고로 137', x: '126.9802', y: '37.5234' },
     tags: ['#국립중앙박물관', '#무료전시', '#문화생활'],
     likes: 56,
     comments: 9,
@@ -91,6 +99,7 @@ const MOCK_POSTS: MockPost[] = [
     content: 'N서울타워 야경 보러 케이블카 타고 올라갔어요 🌃 맑은 날이라 서울 전경이 다 보였고 커플 자물쇠 달아두고 왔어요 ㅎㅎ 올라가기 전에 이태원 맛집에서 저녁 먹고 오는 루트 추천!\n#남산타워 #서울야경 #데이트코스',
     imageUri: 'https://picsum.photos/seed/tower/400/300',
     location: { name: 'N서울타워', distance: '1.8km' },
+    locationPin: { id: 'place-n-seoul-tower', place_name: 'N서울타워', category_name: '관광지', address_name: '서울 용산구 남산공원길 105', road_address_name: '서울 용산구 남산공원길 105', x: '126.9882', y: '37.5512' },
     tags: ['#남산타워', '#서울야경', '#데이트코스'],
     likes: 103,
     comments: 22,
@@ -105,9 +114,37 @@ function PostCard({ post }: { post: MockPost }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
 
+  const { savedPlaces, savePlace, unsavePlace } = useMapStore();
+  const uid = useAuthStore((s) => s.user?.uid ?? s.kakaoUser?.id ?? null);
+
+  const isSaved = post.locationPin
+    ? savedPlaces.some((p) => p.id === post.locationPin!.id)
+    : false;
+
   const toggleLike = () => {
     setLiked((v) => !v);
     setLikeCount((n) => n + (liked ? -1 : 1));
+  };
+
+  const toggleSavePlace = async () => {
+    if (!post.locationPin) return;
+    if (isSaved) {
+      unsavePlace(post.locationPin.id);
+      if (uid) await unsavePinFromFirestore(uid, post.locationPin.id).catch(() => {});
+    } else {
+      savePlace(post.locationPin);
+      if (uid) {
+        const pin = {
+          id:       post.locationPin.id,
+          type:     'saved' as const,
+          lat:      parseFloat(post.locationPin.y),
+          lng:      parseFloat(post.locationPin.x),
+          title:    post.locationPin.place_name,
+          subtitle: post.locationPin.road_address_name || post.locationPin.address_name,
+        };
+        await savePinToFirestore(uid, pin).catch(() => {});
+      }
+    }
   };
 
   return (
@@ -170,7 +207,23 @@ function PostCard({ post }: { post: MockPost }) {
         <TouchableOpacity style={card.actionBtn}>
           <Ionicons name="bookmark-outline" size={19} color="#B89060" />
         </TouchableOpacity>
-        <TouchableOpacity style={[card.actionBtn, { marginLeft: 'auto' }]}>
+        {post.locationPin && (
+          <TouchableOpacity
+            style={[card.actionBtn, { marginLeft: 'auto' }]}
+            onPress={toggleSavePlace}
+            accessibilityLabel={isSaved ? '내 지도에서 제거' : '내 지도에 저장'}
+          >
+            <Ionicons
+              name={isSaved ? 'lasso' : 'lasso-outline'}
+              size={19}
+              color={isSaved ? '#FFAC30' : '#B89060'}
+            />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={post.locationPin ? card.actionBtn : [card.actionBtn, { marginLeft: 'auto' }]}
+          accessibilityLabel="공유"
+        >
           <Ionicons name="share-outline" size={19} color="#B89060" />
         </TouchableOpacity>
       </View>
