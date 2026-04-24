@@ -267,7 +267,7 @@ function PostCard({ post }: { post: MockPost }) {
           <Text style={card.actionText}>{post.comments}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={card.actionBtn} accessibilityLabel="공유">
-          <Ionicons name="share-outline" size={19} color="#B89060" />
+          <Ionicons name="paper-plane-outline" size={19} color="#B89060" />
         </TouchableOpacity>
 
         {/* Right — save */}

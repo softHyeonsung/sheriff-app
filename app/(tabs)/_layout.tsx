@@ -24,7 +24,7 @@ const TAB_ICONS: Record<string, { focused: IoniconName; unfocused: IoniconName }
   index:     { focused: 'map',    unfocused: 'map-outline' },
   feed:      { focused: 'chatbox', unfocused: 'chatbox-outline' },
   community: { focused: 'people', unfocused: 'people-outline' },
-  chat:      { focused: 'send',   unfocused: 'send-outline' },
+  chat:      { focused: 'paper-plane', unfocused: 'paper-plane-outline' },
   profile:   { focused: 'person', unfocused: 'person-outline' },
 };
 
