@@ -641,17 +641,17 @@ const story = StyleSheet.create({
   },
   stripContent: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 10,
+    paddingVertical: 10,
+    gap: 12,
   },
   item: {
     alignItems: 'center',
-    width: 54,
+    width: 70,
   },
   avatarWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 2,
     borderColor: '#D4D4D4',
     overflow: 'hidden',
