@@ -276,11 +276,11 @@ const styles = StyleSheet.create({
   input: {
     height: 52,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     borderRadius: 14,
     paddingHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F5',
     color: '#1A1108',
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',
