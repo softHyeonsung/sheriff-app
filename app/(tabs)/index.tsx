@@ -4,9 +4,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,6 +18,8 @@ import {
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadSavedPins } from '../../src/api/savedPlaces';
+import { fetchNearbyTourSpots } from '../../src/api/tourApi';
+import KOREA_DISTRICTS from '../../src/constants/koreaDistricts';
 import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
@@ -37,7 +41,7 @@ const PIN_COLORS: Record<MapPin['type'], string> = {
 };
 
 const MODE_CONFIG: { mode: MapMode; icon: IoniconName; color: string; iconColor: string; label: string }[] = [
-  { mode: 'basic',           icon: 'map',      color: '#FFAC30', iconColor: '#1A1108',  label: '기본'        },
+  { mode: 'basic',           icon: 'map',      color: '#4285F4', iconColor: '#FFFFFF',  label: '기본'        },
   { mode: 'my_map',          icon: 'bookmark', color: '#FFD700', iconColor: '#1A1108',  label: '내 지도'     },
   { mode: 'gathering_quest', icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108',  label: '모임·퀘스트' },
 ];
@@ -52,10 +56,7 @@ const PLACE_CATEGORIES: { key: string; label: string; code: string }[] = [
 
 const SEOUL = { lat: 37.5665, lng: 126.9780 };
 
-const MOCK_PINS: MapPin[] = [
-  { id: '1', type: 'gathering', lat: 37.5665, lng: 126.9800, title: '남산 산책 모임',   subtitle: '일요일 오전 10시 · 5/8명' },
-  { id: '2', type: 'quest',     lat: 37.5690, lng: 126.9750, title: '강아지 산책 도움', subtitle: '난이도 Easy · 50P'        },
-];
+const MOCK_PINS: MapPin[] = [];
 
 // ── WebView message type guards ────────────────────────────────────────────────
 
@@ -145,7 +146,7 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
       var filtered = PINS.filter(function(pin) {
         if (mode === 'my_map')          return pin.type === 'saved';
         if (mode === 'gathering_quest') return pin.type === 'gathering' || pin.type === 'quest';
-        return true;
+        return pin.type === 'gathering' || pin.type === 'quest'; // basic: no saved pins
       });
       filtered.forEach(function(pin) {
         var img = new kakao.maps.MarkerImage(makeMarkerSrc(PIN_COLORS[pin.type]), new kakao.maps.Size(28, 36));
@@ -214,6 +215,10 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
         level: 5,
       });
       kakao.maps.event.addListener(map, 'click', function() { send('MAP_PRESS', null); });
+      kakao.maps.event.addListener(map, 'idle', function() {
+        var c = map.getCenter();
+        send('MAP_CENTER', { lat: c.getLat(), lng: c.getLng() });
+      });
       renderPins(currentMode);
       send('MAP_READY', null);
     }
@@ -233,13 +238,28 @@ export default function MapScreen() {
   const webRef           = useRef<WebView>(null);
   const modeAnim         = useRef(new Animated.Value(0)).current;
   const hasLoadedNearby  = useRef(false);
+  const nearbyTourSpots  = useRef<PlaceResult[]>([]);
   const mapHtml          = React.useMemo(() => buildMapHTML(KAKAO_JS_KEY, MOCK_PINS), []);
 
-  const [mode,     setMode]     = useState<MapMode>('basic');
-  const [userLoc,  setUserLoc]  = useState<{ lat: number; lng: number } | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const router = useRouter();
+
+  const [mode,       setMode]       = useState<MapMode>('basic');
+  const modeRef = useRef<MapMode>('basic');
+  const [userLoc,    setUserLoc]    = useState<{ lat: number; lng: number } | null>(null);
+  const [mapCenter,  setMapCenter]  = useState<{ lat: number; lng: number } | null>(null);
+  const [mapReady,   setMapReady]   = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [modeOpen, setModeOpen] = useState(false);
+  const [modeOpen,   setModeOpen]   = useState(false);
+  const [selectedDo,      setSelectedDo]      = useState<string | null>(null);
+  const [selectedSiGunGu, setSelectedSiGunGu] = useState<string | null>(null);
+  const [selectedEupMyeonDong, setSelectedEupMyeonDong] = useState<string | null>(null);
+  const [openDrop, setOpenDrop] = useState<'do' | 'sigungu' | 'eupMyeonDong' | null>(null);
+
+  const DO_LIST      = Object.keys(KOREA_DISTRICTS);
+  const SI_GUN_GU_LIST = selectedDo ? Object.keys(KOREA_DISTRICTS[selectedDo] ?? {}) : [];
+  const EUP_MYEON_DONG_LIST = (selectedDo && selectedSiGunGu)
+    ? (KOREA_DISTRICTS[selectedDo]?.[selectedSiGunGu] ?? [])
+    : [];
 
   // Auth
   const firebaseUser = useAuthStore((s) => s.user);
@@ -290,8 +310,13 @@ export default function MapScreen() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return;
 
-      const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const firstPos = { lat: first.coords.latitude, lng: first.coords.longitude };
+      let firstPos = SEOUL;
+      try {
+        const first = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        firstPos = { lat: first.coords.latitude, lng: first.coords.longitude };
+      } catch {
+        console.warn('[location] getCurrentPositionAsync failed, using Seoul fallback');
+      }
       setUserLoc(firstPos);
       if (mapReady) send({ type: 'SET_LOCATION', ...firstPos });
 
@@ -308,10 +333,23 @@ export default function MapScreen() {
     return () => { subscriber?.remove(); };
   }, [mapReady]);
 
-  // Mode sync
+  // Keep modeRef in sync for use inside effects that shouldn't re-run on mode changes
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+
+  // Mode sync — sync PINS then switch mode, clear place markers on non-basic
   useEffect(() => {
-    if (mapReady) send({ type: 'SET_MODE', mode });
-  }, [mode, mapReady]);
+    if (!mapReady) return;
+    // Send up-to-date pins BEFORE SET_MODE so renderPins always has fresh saved places
+    const { savedPlaces: latestSaved } = useMapStore.getState();
+    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...latestSaved] });
+    send({ type: 'SET_MODE', mode });
+    if (mode !== 'basic') {
+      send({ type: 'CLEAR_PLACES' });
+      clearPlaces();
+    } else if (nearbyTourSpots.current.length > 0) {
+      send({ type: 'SHOW_PLACE_MARKERS', places: nearbyTourSpots.current });
+    }
+  }, [mode, mapReady, send, clearPlaces]);
 
   // Sync savedPlaces to WebView whenever they change
   useEffect(() => {
@@ -319,41 +357,34 @@ export default function MapScreen() {
     send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...savedPlaces] });
   }, [mapReady, savedPlaces, send]);
 
-  // Auto-load nearby recommended places on first open (once map + location are both ready)
+  // Auto-load nearby TourAPI recommended spots on first open
   useEffect(() => {
     if (!mapReady || !userLoc || hasLoadedNearby.current) return;
     hasLoadedNearby.current = true;
 
-    const loc = userLoc;
+    const { lat, lng } = userLoc;
     (async () => {
-      const base = `https://dapi.kakao.com/v2/local/search/category.json`
-        + `?x=${loc.lng}&y=${loc.lat}&sort=distance`;
-
-      const [attractions, restaurants, cafes] = await Promise.all([
-        kakaoLocalSearch(`${base}&category_group_code=AT4&radius=1500&size=8`),
-        kakaoLocalSearch(`${base}&category_group_code=FD6&radius=500&size=5`),
-        kakaoLocalSearch(`${base}&category_group_code=CE7&radius=500&size=4`),
-      ]);
-
-      const places = [...attractions, ...restaurants, ...cafes];
+      const places = await fetchNearbyTourSpots(lat, lng);
       if (places.length === 0) return;
 
+      nearbyTourSpots.current = places;
       setPlaceResults(places);
-      send({ type: 'SHOW_PLACE_MARKERS', places });
+      if (modeRef.current === 'basic') {
+        send({ type: 'SHOW_PLACE_MARKERS', places });
+      }
     })();
-  }, [mapReady, userLoc]);
+  }, [mapReady, userLoc, send]);
 
   // WebView messages
   const onMessage = useCallback((e: WebViewMessageEvent) => {
     try {
       const { type, data } = JSON.parse(e.nativeEvent.data);
       if      (type === 'MAP_READY')   setMapReady(true);
+      else if (type === 'MAP_CENTER')  setMapCenter(data as { lat: number; lng: number });
       else if (type === 'PIN_PRESS'   && isMapPin(data))      setSelectedPin(data);
       else if (type === 'PLACE_PRESS' && isPlaceResult(data)) setSelectedPlace(data);
       else if (type === 'MAP_PRESS')   {
         hideCard();
-        send({ type: 'CLEAR_PLACES' });
-        clearPlaces();
       }
     } catch {}
   }, [hideCard, clearPlaces, send, setSelectedPin, setSelectedPlace]);
@@ -376,14 +407,17 @@ export default function MapScreen() {
   const toggleModeDropdown = () => {
     const toValue = modeOpen ? 0 : 1;
     setModeOpen(!modeOpen);
-    Animated.spring(modeAnim, { toValue, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    Animated.spring(modeAnim, { toValue, useNativeDriver: false, tension: 60, friction: 10 }).start();
   };
 
   const selectMode = (m: MapMode) => {
+    // Stop any in-flight animation and snap closed immediately so the
+    // item list doesn't reshuffle while animating (wrong-button bug).
+    modeAnim.stopAnimation();
+    modeAnim.setValue(0);
+    setModeOpen(false);
     setMode(m);
     hideCard();
-    setModeOpen(false);
-    Animated.timing(modeAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start();
   };
 
   // Category tap
@@ -403,7 +437,7 @@ export default function MapScreen() {
     const results = await kakaoLocalSearch(url);
     setPlaceResults(results);
     if (results.length > 0) setShowResults(true);
-    send({ type: 'SHOW_PLACE_MARKERS', places: results });
+    if (modeRef.current === 'basic') send({ type: 'SHOW_PLACE_MARKERS', places: results });
   };
 
   // Keyword search
@@ -417,7 +451,34 @@ export default function MapScreen() {
     const results = await kakaoLocalSearch(url);
     setPlaceResults(results);
     if (results.length > 0) setShowResults(true);
-    send({ type: 'SHOW_PLACE_MARKERS', places: results });
+    if (modeRef.current === 'basic') send({ type: 'SHOW_PLACE_MARKERS', places: results });
+  };
+
+  const handleReSearch = async () => {
+    const loc = mapCenter ?? userLoc ?? SEOUL;
+    if (activeCategory) {
+      const cat = PLACE_CATEGORIES.find((c) => c.key === activeCategory);
+      if (cat) {
+        const url = `https://dapi.kakao.com/v2/local/search/category.json`
+          + `?category_group_code=${cat.code}&x=${loc.lng}&y=${loc.lat}&radius=1000&sort=distance&size=15`;
+        const results = await kakaoLocalSearch(url);
+        setPlaceResults(results);
+        if (results.length > 0) setShowResults(true);
+        send({ type: 'SHOW_PLACE_MARKERS', places: results });
+      }
+    } else if (searchText.trim()) {
+      const url = `https://dapi.kakao.com/v2/local/search/keyword.json`
+        + `?query=${encodeURIComponent(searchText.trim())}&x=${loc.lng}&y=${loc.lat}&radius=5000&sort=distance&size=15`;
+      const results = await kakaoLocalSearch(url);
+      setPlaceResults(results);
+      if (results.length > 0) setShowResults(true);
+      send({ type: 'SHOW_PLACE_MARKERS', places: results });
+    } else {
+      const places = await fetchNearbyTourSpots(loc.lat, loc.lng);
+      nearbyTourSpots.current = places;
+      setPlaceResults(places);
+      send({ type: 'SHOW_PLACE_MARKERS', places });
+    }
   };
 
   const visiblePinCount = mode === 'my_map'
@@ -478,7 +539,7 @@ export default function MapScreen() {
       </View>
 
       {/* ── Category chips ── */}
-      <View style={[styles.categoryRow, { top: insets.top + 72 }]}>
+      <View style={[styles.categoryRow, { top: insets.top + 120 }]}>
         {PLACE_CATEGORIES.map((cat) => (
           <TouchableOpacity
             key={cat.key}
@@ -493,6 +554,128 @@ export default function MapScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* ── Area selector + 게시물 보기 (basic mode only) ── */}
+      {mode === 'basic' && (
+        <View style={[styles.areaRow, { top: insets.top + 72 }]}>
+
+          {/* 도 dropdown */}
+          <View style={styles.areaDropWrap}>
+            <TouchableOpacity
+              style={styles.areaDropBtn}
+              onPress={() => setOpenDrop(openDrop === 'do' ? null : 'do')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.areaDropBtnText} numberOfLines={1}>{selectedDo ?? '도'}</Text>
+              <Ionicons name={openDrop === 'do' ? 'chevron-up' : 'chevron-down'} size={12} color="#7A5C38" />
+            </TouchableOpacity>
+            {openDrop === 'do' && (
+              <ScrollView style={styles.areaDropMenu} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                {DO_LIST.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.areaDropItem, item === selectedDo && styles.areaDropItemActive]}
+                    onPress={() => {
+                      setSelectedDo(item);
+                      setSelectedSiGunGu(null);
+                      setSelectedEupMyeonDong(null);
+                      setOpenDrop(null);
+                    }}
+                  >
+                    <Text style={[styles.areaDropItemText, item === selectedDo && styles.areaDropItemTextActive]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* 시·군·구 dropdown */}
+          <View style={styles.areaDropWrap}>
+            <TouchableOpacity
+              style={[styles.areaDropBtn, !selectedDo && styles.areaDropBtnDisabled]}
+              onPress={() => selectedDo && setOpenDrop(openDrop === 'sigungu' ? null : 'sigungu')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.areaDropBtnText} numberOfLines={1}>{selectedSiGunGu ?? '시·군·구'}</Text>
+              <Ionicons name={openDrop === 'sigungu' ? 'chevron-up' : 'chevron-down'} size={12} color="#7A5C38" />
+            </TouchableOpacity>
+            {openDrop === 'sigungu' && (
+              <ScrollView style={styles.areaDropMenu} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                {SI_GUN_GU_LIST.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.areaDropItem, item === selectedSiGunGu && styles.areaDropItemActive]}
+                    onPress={() => {
+                      setSelectedSiGunGu(item);
+                      setSelectedEupMyeonDong(null);
+                      setOpenDrop(null);
+                    }}
+                  >
+                    <Text style={[styles.areaDropItemText, item === selectedSiGunGu && styles.areaDropItemTextActive]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* 읍·면·동 dropdown */}
+          <View style={styles.areaDropWrap}>
+            <TouchableOpacity
+              style={[styles.areaDropBtn, !selectedSiGunGu && styles.areaDropBtnDisabled]}
+              onPress={() => selectedSiGunGu && setOpenDrop(openDrop === 'eupMyeonDong' ? null : 'eupMyeonDong')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.areaDropBtnText} numberOfLines={1}>{selectedEupMyeonDong ?? '읍·면·동'}</Text>
+              <Ionicons name={openDrop === 'eupMyeonDong' ? 'chevron-up' : 'chevron-down'} size={12} color="#7A5C38" />
+            </TouchableOpacity>
+            {openDrop === 'eupMyeonDong' && (
+              <ScrollView style={styles.areaDropMenu} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                {EUP_MYEON_DONG_LIST.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.areaDropItem, item === selectedEupMyeonDong && styles.areaDropItemActive]}
+                    onPress={() => { setSelectedEupMyeonDong(item); setOpenDrop(null); }}
+                  >
+                    <Text style={[styles.areaDropItemText, item === selectedEupMyeonDong && styles.areaDropItemTextActive]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+
+          {/* 게시물 보기 */}
+          <TouchableOpacity
+            style={styles.viewPostsBtn}
+            onPress={() => router.push('/(tabs)/feed')}
+            activeOpacity={0.85}
+            accessibilityLabel="이 지역 게시물 보기"
+          >
+            <Ionicons name="chatbox-outline" size={14} color="#1A1108" />
+            <Text style={styles.viewPostsBtnText}>게시물 보기</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Re-search button (basic mode only) ── */}
+      {mode === 'basic' && mapReady && (
+        <View style={[styles.reSearchRow, { bottom: bottomRowY }]}>
+          <TouchableOpacity
+            style={styles.reSearchBtn}
+            onPress={handleReSearch}
+            activeOpacity={0.85}
+            accessibilityLabel="이 지역에서 재검색"
+          >
+            <Ionicons name="refresh" size={14} color="#1A1108" />
+            <Text style={styles.reSearchBtnText}>이 지역에서 재검색</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Bottom row: mode dropdown (left) + locate (right) ── */}
       <View style={[styles.bottomRow, { bottom: bottomRowY }]}>
@@ -515,6 +698,7 @@ export default function MapScreen() {
             return (
               <Animated.View
                 key={cfg.mode}
+                pointerEvents={modeOpen ? 'auto' : 'none'}
                 style={[
                   styles.modeCircleAbsolute,
                   { transform: [{ translateY }, { scale }], opacity },
@@ -629,6 +813,124 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
     color: '#FFFFFF',
+  },
+
+  // Area selector row
+  areaRow: {
+    position: 'absolute',
+    left: 16, right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 70,
+  },
+  areaDropWrap: {
+    position: 'relative',
+  },
+  areaDropBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  areaDropBtnText: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+    maxWidth: 72,
+  },
+  areaDropBtnDisabled: {
+    opacity: 0.4,
+  },
+  areaDropMenu: {
+    position: 'absolute',
+    top: 40,
+    left: 0,
+    maxHeight: 220,
+    minWidth: 110,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  areaDropItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  areaDropItemActive: {
+    backgroundColor: '#FFF0D4',
+  },
+  areaDropItemText: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-Medium',
+    color: '#1A1108',
+  },
+  areaDropItemTextActive: {
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#A36E1D',
+  },
+  viewPostsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFAC30',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#A36E1D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  viewPostsBtnText: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+  },
+
+  // Re-search button
+  reSearchRow: {
+    position: 'absolute',
+    left: 0, right: 0,
+    alignItems: 'center',
+    zIndex: 60,
+  },
+  reSearchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+  },
+  reSearchBtnText: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
   },
 
   // Category chips

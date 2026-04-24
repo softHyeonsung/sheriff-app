@@ -385,7 +385,7 @@ export default function TabLayout() {
         {/* 2. 피드 */}
         <Tabs.Screen
           name="feed"
-          options={{ title: '보안관' }}
+          options={{ title: '피드', headerShown: false }}
         />
 
         {/* 3. 모임 */}

@@ -90,11 +90,17 @@ export default function LoginScreen() {
     }
     setLoading(true);
     try {
-      await login(email, password);
+      await login(email.trim(), password);
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.error(err);
-      Alert.alert('로그인 실패', '이메일이나 비밀번호가 일치하지 않습니다.');
+      const code = err?.code ?? '';
+      if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+        Alert.alert('로그인 실패', '이메일 또는 비밀번호가 올바르지 않아요.\n계정이 없다면 회원가입을 먼저 해주세요.');
+      } else if (code === 'auth/too-many-requests') {
+        Alert.alert('로그인 실패', '로그인 시도가 너무 많아요. 잠시 후 다시 시도해주세요.');
+      } else {
+        Alert.alert('로그인 실패', err?.message ?? '알 수 없는 오류가 발생했어요.');
+      }
     } finally {
       setLoading(false);
     }
