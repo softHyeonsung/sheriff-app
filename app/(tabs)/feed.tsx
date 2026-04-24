@@ -1,5 +1,5 @@
 // 경로: app/(tabs)/feed.tsx
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Octicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -174,6 +174,7 @@ function LassoIcon({ size = 19, color = '#B89060' }: { size?: number; color?: st
 function PostCard({ post }: { post: MockPost }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
+  const [bookmarked, setBookmarked] = useState(false);
 
   const { savedPlaces, savePlace, unsavePlace } = useMapStore();
   const uid = useAuthStore((s) => s.user?.uid ?? s.kakaoUser?.id ?? null);
@@ -281,8 +282,8 @@ function PostCard({ post }: { post: MockPost }) {
               <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#B89060'} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={card.actionBtn} accessibilityLabel="북마크">
-            <Ionicons name="bookmark-outline" size={19} color="#B89060" />
+          <TouchableOpacity style={card.actionBtn} onPress={() => setBookmarked(v => !v)} accessibilityLabel="북마크">
+            <Octicons name={bookmarked ? 'bookmark-fill' : 'bookmark'} size={19} color={bookmarked ? '#FFAC30' : '#B89060'} />
           </TouchableOpacity>
         </View>
       </View>
