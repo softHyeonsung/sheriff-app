@@ -1,7 +1,7 @@
 // 경로: app/(tabs)/community.tsx
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CATEGORIES = [
@@ -15,11 +15,33 @@ const CATEGORIES = [
 
 export default function CommunityScreen() {
   const insets = useSafeAreaInsets();
+  const [searchText, setSearchText] = useState('');
 
   return (
+    <View style={styles.container}>
+      {/* ── Search bar ── */}
+      <View style={[styles.searchWrap, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={17} color="#B89060" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="모임 검색"
+            placeholderTextColor="#B89060"
+            value={searchText}
+            onChangeText={setSearchText}
+            returnKeyType="search"
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={17} color="#B89060" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 96 }]}
+      style={styles.scroll}
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
       showsVerticalScrollIndicator={false}
     >
       {/* Header CTA */}
@@ -73,6 +95,7 @@ export default function CommunityScreen() {
         <Ionicons name="chevron-forward" size={18} color="#A36E1D" />
       </View>
     </ScrollView>
+    </View>
   );
 }
 
@@ -81,6 +104,32 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+  searchWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFE0C4',
+  },
+  searchBar: {
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#EFE0C4',
+  },
+  searchIcon: { marginRight: 6 },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#1A1108',
+    paddingVertical: 0,
+  },
+  scroll: { flex: 1 },
   content: {
     paddingHorizontal: 16,
     paddingTop: 20,
