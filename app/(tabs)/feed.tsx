@@ -189,8 +189,8 @@ function PostCard({ post }: { post: MockPost }) {
         <Image source={{ uri: post.imageUri }} style={card.image} />
       )}
 
-      {/* Content */}
-      <Text style={card.content}>{post.content}</Text>
+      {/* Content — hashtags stripped (shown as chips below) */}
+      <Text style={card.content}>{post.content.replace(/#[\w가-힣]+/g, '').trim()}</Text>
 
       {/* Tags */}
       <View style={card.tagRow}>
