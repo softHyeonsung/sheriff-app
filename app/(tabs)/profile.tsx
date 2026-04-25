@@ -1,5 +1,5 @@
 // 경로: app/(tabs)/profile.tsx
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Octicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -8,6 +8,7 @@ import { logout } from '../../src/api/auth';
 import { clearKakaoSession } from '../../src/api/kakaoAuth';
 import ShieldIcon from '../../src/components/ShieldIcon';
 import { useAuthStore } from '../../src/store/authStore';
+import { usePostStore } from '../../src/store/postStore';
 
 const STAT_ITEMS = [
   { label: '포인트', value: '0', icon: 'star' as const },
@@ -15,18 +16,19 @@ const STAT_ITEMS = [
   { label: '모임', value: '0', icon: 'people' as const },
 ];
 
-const MENU_ITEMS = [
-  { icon: 'bookmark' as const, label: '저장한 장소', chevron: true },
+const PLACE_MENU_ITEMS = [
+  { icon: 'location' as const, label: '저장한 장소', chevron: true },
   { icon: 'trophy' as const, label: '내 뱃지', chevron: true },
   { icon: 'settings' as const, label: '설정', chevron: true },
   { icon: 'log-out' as const, label: '로그아웃', chevron: false },
 ];
 
 export default function ProfileScreen() {
-  const insets       = useSafeAreaInsets();
-  const router       = useRouter();
-  const setUser      = useAuthStore((s) => s.setUser);
-  const setKakaoUser = useAuthStore((s) => s.setKakaoUser);
+  const insets        = useSafeAreaInsets();
+  const router        = useRouter();
+  const setUser       = useAuthStore((s) => s.setUser);
+  const setKakaoUser  = useAuthStore((s) => s.setKakaoUser);
+  const savedPostIds  = usePostStore((s) => s.savedPostIds);
 
   const handleLogout = () => {
     Alert.alert('로그아웃', '정말 로그아웃 하시겠어요?', [
@@ -91,6 +93,11 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>{item.label}</Text>
           </View>
         ))}
+        <View style={styles.statItem}>
+          <Octicons name="bookmark-fill" size={18} color="#FFAC30" style={styles.statIcon} />
+          <Text style={styles.statValue}>{savedPostIds.length}</Text>
+          <Text style={styles.statLabel}>저장</Text>
+        </View>
       </View>
 
       {/* Home verification teaser */}
@@ -107,10 +114,22 @@ export default function ProfileScreen() {
 
       {/* Menu list */}
       <View style={styles.menuList}>
-        {MENU_ITEMS.map((item, idx) => (
+        {/* 저장한 게시물 */}
+        <TouchableOpacity style={[styles.menuItem, styles.menuItemBorder]} accessibilityRole="button" accessibilityLabel="저장한 게시물">
+          <Octicons name="bookmark-fill" size={20} color="#A36E1D" />
+          <Text style={styles.menuLabel}>저장한 게시물</Text>
+          {savedPostIds.length > 0 && (
+            <View style={styles.menuBadge}>
+              <Text style={styles.menuBadgeText}>{savedPostIds.length}</Text>
+            </View>
+          )}
+          <Ionicons name="chevron-forward" size={16} color="#B89060" style={styles.menuChevron} />
+        </TouchableOpacity>
+
+        {PLACE_MENU_ITEMS.map((item, idx) => (
           <TouchableOpacity
             key={item.label}
-            style={[styles.menuItem, idx < MENU_ITEMS.length - 1 && styles.menuItemBorder]}
+            style={[styles.menuItem, idx < PLACE_MENU_ITEMS.length - 1 && styles.menuItemBorder]}
             accessibilityRole="button"
             accessibilityLabel={item.label}
             onPress={item.label === '로그아웃' ? handleLogout : undefined}
@@ -315,5 +334,18 @@ const styles = StyleSheet.create({
   },
   menuChevron: {
     marginLeft: 'auto',
+  },
+  menuBadge: {
+    backgroundColor: '#FFAC30',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 'auto',
+    marginRight: 6,
+  },
+  menuBadgeText: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
   },
 });

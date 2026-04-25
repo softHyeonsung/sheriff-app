@@ -13,8 +13,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
+import { loadSavedPosts } from '../../src/api/savedPosts';
 import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
+import { usePostStore } from '../../src/store/postStore';
 
 // ── Icon map ───────────────────────────────────────────────────────────────────
 
@@ -364,6 +366,18 @@ function MapOverlaySheets() {
 // ── Layout ─────────────────────────────────────────────────────────────────────
 
 export default function TabLayout() {
+  const firebaseUser = useAuthStore((s) => s.user);
+  const kakaoUser    = useAuthStore((s) => s.kakaoUser);
+  const uid          = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
+  const loadSavedPostsStore = usePostStore((s) => s.loadSavedPosts);
+
+  useEffect(() => {
+    if (!uid) return;
+    loadSavedPosts(uid)
+      .then(loadSavedPostsStore)
+      .catch((e) => console.warn('[savedPosts] load failed:', e));
+  }, [uid]);
+
   return (
     <View style={styles.root}>
       <Tabs

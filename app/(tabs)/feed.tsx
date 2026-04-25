@@ -14,8 +14,10 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
+import { savePostToFirestore, unsavePostFromFirestore } from '../../src/api/savedPosts';
 import { useAuthStore } from '../../src/store/authStore';
 import { PlaceResult, useMapStore } from '../../src/store/mapStore';
+import { usePostStore } from '../../src/store/postStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -174,10 +176,22 @@ function LassoIcon({ size = 19, color = '#B89060' }: { size?: number; color?: st
 function PostCard({ post }: { post: MockPost }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
-  const [bookmarked, setBookmarked] = useState(false);
 
   const { savedPlaces, savePlace, unsavePlace } = useMapStore();
+  const { savedPostIds, savePost, unsavePost } = usePostStore();
   const uid = useAuthStore((s) => s.user?.uid ?? s.kakaoUser?.id ?? null);
+
+  const bookmarked = savedPostIds.includes(post.id);
+
+  const toggleBookmark = async () => {
+    if (bookmarked) {
+      unsavePost(post.id);
+      if (uid) unsavePostFromFirestore(uid, post.id).catch(() => {});
+    } else {
+      savePost(post.id);
+      if (uid) savePostToFirestore(uid, post.id).catch(() => {});
+    }
+  };
 
   const isSaved = post.locationPin
     ? savedPlaces.some((p) => p.id === post.locationPin!.id)
@@ -282,7 +296,7 @@ function PostCard({ post }: { post: MockPost }) {
               <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#B89060'} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={card.actionBtn} onPress={() => setBookmarked(v => !v)} accessibilityLabel="북마크">
+          <TouchableOpacity style={card.actionBtn} onPress={toggleBookmark} accessibilityLabel="북마크">
             <Octicons name={bookmarked ? 'bookmark-fill' : 'bookmark'} size={19} color={bookmarked ? '#FFAC30' : '#B89060'} />
           </TouchableOpacity>
         </View>
