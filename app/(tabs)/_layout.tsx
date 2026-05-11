@@ -1,4 +1,4 @@
-// 경로: app/(tabs)/_layout.tsx
+﻿// 경로: app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E5E5E5',
+    backgroundColor: '#D4D4D4',
     alignSelf: 'center',
     marginTop: 12,
     marginBottom: 16,
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E5E5E5',
+    borderColor: '#D4D4D4',
     alignItems: 'center',
     justifyContent: 'center',
   },

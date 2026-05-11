@@ -1,4 +1,4 @@
-// 경로: app/create-gathering.tsx
+﻿// 경로: app/create-gathering.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EFE0C4',
+    borderBottomColor: '#D4D4D4',
   },
   headerTitle: {
     fontSize: 17,
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   typeChipActive: {
     backgroundColor: '#FFAC30',
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
   deadlineChipActive: {
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
   catChipActive: { backgroundColor: '#FFAC30', borderColor: '#FFAC30' },
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   titleInput: {
     fontSize: 15,
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   hashtagText: {
     fontSize: 13,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   rowCardInfo: { flex: 1 },
   rowCardTitle: {
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     marginTop: 6,
   },
   tipsText: {

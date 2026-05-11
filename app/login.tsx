@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
 import * as Google from 'expo-auth-session/providers/google';
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   divider: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E5E5',
+    backgroundColor: '#D4D4D4',
   },
   dividerText: {
     marginHorizontal: 12,
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   googleBtn: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   googleBtnText: {
     flex: 1,

@@ -1,4 +1,4 @@
-// 경로: app/(tabs)/community.tsx
+﻿// 경로: app/(tabs)/community.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -646,7 +646,7 @@ const gcard = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   avatarSheriff: { borderColor: '#FFAC30', borderWidth: 2 },
   authorInfo: { flex: 1 },
@@ -751,7 +751,7 @@ const gcard = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#EFE0C4',
+    borderTopColor: '#D4D4D4',
     marginTop: 10,
     gap: 4,
   },
@@ -783,7 +783,7 @@ const gcard = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
   manageBtnAlert: {
@@ -839,7 +839,7 @@ const gcard = StyleSheet.create({
     paddingVertical: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
   chatBtnActive: {
@@ -881,7 +881,7 @@ const modal = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EFE0C4',
+    borderBottomColor: '#D4D4D4',
   },
   headerTitle: {
     fontSize: 17,
@@ -910,7 +910,7 @@ const modal = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     padding: 14,
     gap: 10,
   },
@@ -927,7 +927,7 @@ const modal = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   reqAvatarApproved: { borderColor: '#FFAC30' },
   reqInfo: { flex: 1 },
@@ -956,7 +956,7 @@ const modal = StyleSheet.create({
   rejectBtn: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 9,
@@ -979,7 +979,7 @@ const modal = StyleSheet.create({
     flex: 1,
     height: 40,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     borderRadius: 10,
     paddingHorizontal: 12,
     fontSize: 14,
@@ -994,7 +994,7 @@ const modal = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
 
   // Approved members
@@ -1034,7 +1034,7 @@ const modal = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     marginTop: 8,
   },
   chatNoticeText: {
@@ -1066,7 +1066,7 @@ const cat = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
   chipActive: { backgroundColor: '#FFAC30', borderColor: '#FFAC30' },
@@ -1143,7 +1143,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   emptyTitle: {
     fontSize: 18,

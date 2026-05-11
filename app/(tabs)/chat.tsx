@@ -1,4 +1,4 @@
-// 경로: app/(tabs)/chat.tsx
+﻿// 경로: app/(tabs)/chat.tsx
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     shadowColor: '#A36E1D',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   infoText: {
     fontSize: 12,

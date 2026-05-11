@@ -1,4 +1,4 @@
-// 경로: app/(tabs)/feed.tsx
+﻿// 경로: app/(tabs)/feed.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -415,7 +415,7 @@ const card = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   avatarSheriff: {
     borderColor: '#FFAC30',
@@ -497,7 +497,7 @@ const card = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderTopWidth: 1,
-    borderTopColor: '#EFE0C4',
+    borderTopColor: '#D4D4D4',
     marginTop: 10,
     gap: 4,
   },
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   emptyTitle: {
     fontSize: 18,

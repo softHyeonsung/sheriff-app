@@ -1,4 +1,4 @@
-// 경로: app/(tabs)/index.tsx
+﻿// 경로: app/(tabs)/index.tsx
 // Map Screen — Kakao Map WebView + search + place search + mode circles
 
 import { Ionicons } from '@expo/vector-icons';
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.10,
@@ -945,7 +945,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   reSearchBtnText: {
     fontSize: 13,
@@ -1094,7 +1094,7 @@ const styles = StyleSheet.create({
   modeCircleInactive: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   locationFab: {
     width: 48,
@@ -1120,7 +1120,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.06,

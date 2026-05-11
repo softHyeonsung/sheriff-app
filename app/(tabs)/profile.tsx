@@ -1,4 +1,4 @@
-// 경로: app/(tabs)/profile.tsx
+﻿// 경로: app/(tabs)/profile.tsx
 import { Ionicons, Octicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   avatarWrap: {
     position: 'relative',
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   avatarEditBtn: {
     position: 'absolute',
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   rankText: {
     fontSize: 13,
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
   editProfileBtnText: {
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     overflow: 'hidden',
   },
   statItem: {
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   },
   statDivider: {
     borderRightWidth: 1,
-    borderRightColor: '#E5E5E5',
+    borderRightColor: '#D4D4D4',
   },
   statIcon: {
     marginBottom: 4,
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   verifyText: {
     flex: 1,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     overflow: 'hidden',
   },
   menuItem: {
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   menuItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5E5',
+    borderBottomColor: '#D4D4D4',
   },
   menuLabel: {
     flex: 1,

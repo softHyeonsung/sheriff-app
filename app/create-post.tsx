@@ -1,4 +1,4 @@
-// 경로: app/create-post.tsx
+﻿// 경로: app/create-post.tsx
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#EFE0C4',
+    borderBottomColor: '#D4D4D4',
   },
   headerTitle: {
     fontSize: 17,
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   typeChipActive: {
     backgroundColor: '#FFAC30',
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   contentInput: {
     fontSize: 15,
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   hashtagText: {
     fontSize: 13,
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   placeInfo: { flex: 1 },
   placeName: {
@@ -426,7 +426,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#EFE0C4',
+    borderColor: '#D4D4D4',
   },
   tipsText: {
     flex: 1,
