@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadSavedPins } from '../../src/api/savedPlaces';
 import { fetchNearbyTourSpots } from '../../src/api/tourApi';
 import KOREA_DISTRICTS from '../../src/constants/koreaDistricts';
+import { MOCK_GATHERINGS, haversineM } from '../../src/constants/mockGatherings';
 import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
@@ -57,6 +58,8 @@ const PLACE_CATEGORIES: { key: string; label: string; code: string }[] = [
 const SEOUL = { lat: 37.5665, lng: 126.9780 };
 
 const MOCK_PINS: MapPin[] = [];
+
+const GATHERING_CATEGORIES = ['전체', '⚡번개', '산책·운동', '맛집', '문화·예술', '스터디', '취미', '봉사'];
 
 // ── WebView message type guards ────────────────────────────────────────────────
 
@@ -130,6 +133,19 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
       return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
 
+    function makeGatheringMarkerSrc(color, isFlash) {
+      var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">'
+        + '<path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z"'
+        + ' fill="' + color + '" stroke="white" stroke-width="1.5"/>'
+        + '<circle cx="14" cy="14" r="5" fill="white"/>';
+      if (isFlash) {
+        svg += '<circle cx="21" cy="6" r="6" fill="#FF8C00" stroke="white" stroke-width="0.8"/>'
+          + '<text x="21" y="9.5" text-anchor="middle" font-size="8" fill="white">⚡</text>';
+      }
+      svg += '</svg>';
+      return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    }
+
     function makePlaceMarkerSrc(color) {
       var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28" viewBox="0 0 22 28">'
         + '<path d="M11 0C4.92 0 0 4.92 0 11c0 8.25 11 17 11 17S22 19.25 22 11C22 4.92 17.08 0 11 0z"'
@@ -149,7 +165,10 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
         return pin.type === 'gathering' || pin.type === 'quest'; // basic: no saved pins
       });
       filtered.forEach(function(pin) {
-        var img = new kakao.maps.MarkerImage(makeMarkerSrc(PIN_COLORS[pin.type]), new kakao.maps.Size(28, 36));
+        var markerSrc = (pin.type === 'gathering')
+          ? makeGatheringMarkerSrc(PIN_COLORS[pin.type], pin.flash === true)
+          : makeMarkerSrc(PIN_COLORS[pin.type]);
+        var img = new kakao.maps.MarkerImage(markerSrc, new kakao.maps.Size(28, 36));
         var marker = new kakao.maps.Marker({
           position: new kakao.maps.LatLng(pin.lat, pin.lng),
           map: map, image: img, title: pin.title,
@@ -243,8 +262,9 @@ export default function MapScreen() {
 
   const router = useRouter();
 
-  const [mode,       setMode]       = useState<MapMode>('basic');
-  const modeRef = useRef<MapMode>('basic');
+  const [mode,               setMode]               = useState<MapMode>('basic');
+  const modeRef              = useRef<MapMode>('basic');
+  const [gatheringCatFilter, setGatheringCatFilter] = useState<string>('전체');
   const [userLoc,    setUserLoc]    = useState<{ lat: number; lng: number } | null>(null);
   const [mapCenter,  setMapCenter]  = useState<{ lat: number; lng: number } | null>(null);
   const [mapReady,   setMapReady]   = useState(false);
@@ -351,11 +371,48 @@ export default function MapScreen() {
     }
   }, [mode, mapReady, send, clearPlaces]);
 
-  // Sync savedPlaces to WebView whenever they change
+  // Sync savedPlaces to WebView whenever they change (gathering_quest manages its own pins)
   useEffect(() => {
     if (!mapReady) return;
+    if (modeRef.current === 'gathering_quest') return;
     send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...savedPlaces] });
   }, [mapReady, savedPlaces, send]);
+
+  // Gathering pins — compute 15 nearest and push when in gathering_quest mode
+  useEffect(() => {
+    if (!mapReady || mode !== 'gathering_quest') return;
+    const now = Date.now();
+    const loc = userLoc ?? SEOUL;
+    const q = searchText.trim().toLowerCase();
+
+    const gPins: MapPin[] = MOCK_GATHERINGS
+      .filter((g) => {
+        if (g.type === 'flash' && g.deadlineMs && now > g.deadlineMs) return false;
+        if (gatheringCatFilter === '⚡번개') return g.type === 'flash';
+        if (gatheringCatFilter !== '전체') return g.category === gatheringCatFilter;
+        return true;
+      })
+      .filter((g) => !q ||
+        g.title.toLowerCase().includes(q) ||
+        g.location.name.toLowerCase().includes(q) ||
+        g.description.toLowerCase().includes(q)
+      )
+      .map((g) => ({ g, dist: haversineM(loc.lat, loc.lng, g.location.lat, g.location.lng) }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 15)
+      .map(({ g }) => ({
+        id: g.id,
+        type: 'gathering' as const,
+        lat: g.location.lat,
+        lng: g.location.lng,
+        title: g.title,
+        subtitle: g.location.name,
+        flash: g.type === 'flash',
+      }));
+
+    const { savedPlaces: latestSaved } = useMapStore.getState();
+    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...latestSaved, ...gPins] });
+  }, [mode, mapReady, gatheringCatFilter, searchText, userLoc, send]);
 
   // Auto-load nearby TourAPI recommended spots on first open
   useEffect(() => {
@@ -444,6 +501,7 @@ export default function MapScreen() {
   const handleSearch = async () => {
     const q = searchText.trim();
     if (!q) return;
+    if (modeRef.current === 'gathering_quest') return; // gathering useEffect handles filtering
     setActiveCategory(null);
     const loc = userLoc ?? SEOUL;
     const url = `https://dapi.kakao.com/v2/local/search/keyword.json`
@@ -538,22 +596,48 @@ export default function MapScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ── Category chips ── */}
-      <View style={[styles.categoryRow, { top: insets.top + 120 }]}>
-        {PLACE_CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.key}
-            style={[styles.categoryChip, activeCategory === cat.key && styles.categoryChipActive]}
-            onPress={() => handleCategoryPress(cat)}
-            activeOpacity={0.8}
-            accessibilityLabel={cat.label}
-          >
-            <Text style={[styles.categoryChipText, activeCategory === cat.key && styles.categoryChipTextActive]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* ── Place category chips (basic / my_map) ── */}
+      {mode !== 'gathering_quest' && (
+        <View style={[styles.categoryRow, { top: insets.top + 120 }]}>
+          {PLACE_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat.key}
+              style={[styles.categoryChip, activeCategory === cat.key && styles.categoryChipActive]}
+              onPress={() => handleCategoryPress(cat)}
+              activeOpacity={0.8}
+              accessibilityLabel={cat.label}
+            >
+              <Text style={[styles.categoryChipText, activeCategory === cat.key && styles.categoryChipTextActive]}>
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* ── Gathering category chips (gathering_quest) ── */}
+      {mode === 'gathering_quest' && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.gatheringCategoryRow, { top: insets.top + 72 }]}
+          contentContainerStyle={styles.gatheringCategoryContent}
+        >
+          {GATHERING_CATEGORIES.map((cat) => (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.categoryChip, gatheringCatFilter === cat && styles.categoryChipActive]}
+              onPress={() => setGatheringCatFilter(cat)}
+              activeOpacity={0.8}
+              accessibilityLabel={cat}
+            >
+              <Text style={[styles.categoryChipText, gatheringCatFilter === cat && styles.categoryChipTextActive]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       {/* ── Area selector + 게시물 보기 (basic mode only) ── */}
       {mode === 'basic' && (
@@ -941,6 +1025,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 8,
     zIndex: 60,
+  },
+  gatheringCategoryRow: {
+    position: 'absolute',
+    left: 0, right: 0,
+    zIndex: 60,
+  },
+  gatheringCategoryContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 2,
+    gap: 8,
+    flexDirection: 'row',
   },
   categoryChip: {
     height: 34,

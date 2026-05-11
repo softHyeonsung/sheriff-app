@@ -12,6 +12,7 @@ export interface MapPin {
   lng: number;
   title: string;
   subtitle?: string;
+  flash?: boolean;
 }
 
 export interface PlaceResult {

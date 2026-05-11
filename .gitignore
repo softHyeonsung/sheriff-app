@@ -40,26 +40,11 @@ yarn-error.*
 /ios
 /android
 
-# Firebase credentials (keep locally, never commit)
+# Firebase Keys
 src/firebaseConfig.ts
 .env
-google-services.json
-GoogleService-Info.plist
-.firebase/
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
 
-# EAS / Expo build output
-eas.json
-.easignore
-
-# Test coverage
-coverage/
-
-# IDE
-.idea/
-.vscode/settings.json
-
-# General logs
-*.log
+#gstack
+.claude/
+.claude/skills/gstack/bin/
+.claude/skills/gstack/browse/dist/

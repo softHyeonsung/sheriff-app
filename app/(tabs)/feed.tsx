@@ -1,5 +1,5 @@
 // 경로: app/(tabs)/feed.tsx
-import { Ionicons, Octicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -179,7 +179,7 @@ function PostCard({ post }: { post: MockPost }) {
 
   const { savedPlaces, savePlace, unsavePlace } = useMapStore();
   const { savedPostIds, savePost, unsavePost } = usePostStore();
-  const uid = useAuthStore((s) => s.user?.uid ?? s.kakaoUser?.id ?? null);
+  const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
 
   const bookmarked = savedPostIds.includes(post.id);
 
@@ -234,10 +234,7 @@ function PostCard({ post }: { post: MockPost }) {
           <View style={card.authorNameRow}>
             <Text style={card.authorName}>{post.author.nickname}</Text>
             {post.author.isSheriff && (
-              <View style={card.sheriffBadge}>
-                <Ionicons name="shield-checkmark" size={11} color="#A36E1D" />
-                <Text style={card.sheriffBadgeText}>보안관</Text>
-              </View>
+              <Image source={require('../../assets/images/sheriff_verified.jpg')} style={card.sheriffBadge} />
             )}
           </View>
           <Text style={card.meta}>{post.timeAgo} · {post.contentType}</Text>
@@ -297,7 +294,7 @@ function PostCard({ post }: { post: MockPost }) {
             </TouchableOpacity>
           )}
           <TouchableOpacity style={card.actionBtn} onPress={toggleBookmark} accessibilityLabel="북마크">
-            <Octicons name={bookmarked ? 'bookmark-fill' : 'bookmark'} size={19} color={bookmarked ? '#FFAC30' : '#B89060'} />
+            <Ionicons name={bookmarked ? 'bookmark' : 'bookmark-outline'} size={19} color={bookmarked ? '#FFAC30' : '#B89060'} />
           </TouchableOpacity>
         </View>
       </View>
@@ -437,20 +434,9 @@ const card = StyleSheet.create({
     color: '#1A1108',
   },
   sheriffBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EFE0C4',
-  },
-  sheriffBadgeText: {
-    fontSize: 10,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#A36E1D',
+    width: 60,
+    height: 20,
+    resizeMode: 'contain',
   },
   meta: {
     fontSize: 12,

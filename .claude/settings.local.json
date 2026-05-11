@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh pr:*)"
+      "Bash(gh pr:*)",
+      "mcp__plugin_figma_figma__get_screenshot",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k\\) for k in {**d.get\\('dependencies',{}\\), **d.get\\('devDependencies',{}\\)}.keys\\(\\)]\")",
+      "Bash(node -e \"const d=require\\('./package.json'\\); Object.keys\\({...d.dependencies,...\\(d.devDependencies||{}\\)}\\).forEach\\(k=>console.log\\(k\\)\\)\")",
+      "Bash(npx tsc *)",
+      "Skill(design-review)"
     ]
   }
 }
