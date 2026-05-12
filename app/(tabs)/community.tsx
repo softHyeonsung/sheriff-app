@@ -2,6 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -252,6 +253,7 @@ function GatheringCard({
   distanceM: number | null;
   onManage: () => void;
 }) {
+  const router = useRouter();
   const entry = useGatheringStore((s) => s.gatherings[gathering.id]);
   const { requestJoin, cancelRequest, createChatRoom } = useGatheringStore();
   const uid = useAuthStore(
@@ -291,73 +293,76 @@ function GatheringCard({
 
   return (
     <View style={[gcard.wrap, gathering.host.isSheriff && gcard.wrapSheriff]}>
-      {/* Author row */}
-      <View style={gcard.authorRow}>
-        <View style={[gcard.avatar, gathering.host.isSheriff && gcard.avatarSheriff]}>
-          <Ionicons name="person" size={18} color={gathering.host.isSheriff ? '#A36E1D' : '#B89060'} />
-        </View>
-        <View style={gcard.authorInfo}>
-          <View style={gcard.authorNameRow}>
-            <Text style={gcard.authorName}>{gathering.host.nickname}</Text>
-            {gathering.host.isSheriff && (
-              <Image
-                source={require('../../assets/images/sheriff_verified.jpg')}
-                style={gcard.sheriffBadge}
-              />
-            )}
-            {gathering.isOwn && (
-              <View style={gcard.myBadge}>
-                <Text style={gcard.myBadgeText}>내 모임</Text>
-              </View>
-            )}
+      {/* Tappable content area → gathering detail */}
+      <TouchableOpacity activeOpacity={0.97} onPress={() => router.push({ pathname: '/gathering/[id]', params: { id: gathering.id } })}>
+        {/* Author row */}
+        <View style={gcard.authorRow}>
+          <View style={[gcard.avatar, gathering.host.isSheriff && gcard.avatarSheriff]}>
+            <Ionicons name="person" size={18} color={gathering.host.isSheriff ? '#A36E1D' : '#B89060'} />
           </View>
-          <Text style={gcard.meta}>{gathering.timeAgo} · {gathering.category}</Text>
+          <View style={gcard.authorInfo}>
+            <View style={gcard.authorNameRow}>
+              <Text style={gcard.authorName}>{gathering.host.nickname}</Text>
+              {gathering.host.isSheriff && (
+                <Image
+                  source={require('../../assets/images/sheriff_verified.jpg')}
+                  style={gcard.sheriffBadge}
+                />
+              )}
+              {gathering.isOwn && (
+                <View style={gcard.myBadge}>
+                  <Text style={gcard.myBadgeText}>내 모임</Text>
+                </View>
+              )}
+            </View>
+            <Text style={gcard.meta}>{gathering.timeAgo} · {gathering.category}</Text>
+          </View>
+          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="ellipsis-horizontal" size={18} color="#B89060" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="ellipsis-horizontal" size={18} color="#B89060" />
-        </TouchableOpacity>
-      </View>
 
-      {/* Title (flash: ⚡ icon prefix) */}
-      <View style={gcard.titleRow}>
-        {gathering.type === 'flash' && (
-          <Ionicons name="flash" size={15} color="#FF8C00" style={{ marginTop: 2 }} />
-        )}
-        <Text style={[gcard.title, gathering.type === 'flash' && gcard.titleFlash]}>
-          {gathering.title}
-        </Text>
-      </View>
-
-      {/* Flash deadline countdown */}
-      {gathering.type === 'flash' && gathering.deadlineMs && (
-        <View style={gcard.deadlineRow}>
-          <Ionicons name="time-outline" size={13} color="#FF8C00" />
-          <Text style={gcard.deadlineText}>
-            {formatTimeLeft(gathering.deadlineMs)} 남음 · 마감 시 자동 삭제
+        {/* Title (flash: ⚡ icon prefix) */}
+        <View style={gcard.titleRow}>
+          {gathering.type === 'flash' && (
+            <Ionicons name="flash" size={15} color="#FF8C00" style={{ marginTop: 2 }} />
+          )}
+          <Text style={[gcard.title, gathering.type === 'flash' && gcard.titleFlash]}>
+            {gathering.title}
           </Text>
         </View>
-      )}
 
-      <Text style={gcard.content}>{gathering.description}</Text>
-
-      {/* Tags */}
-      <View style={gcard.tagRow}>
-        {gathering.tags.map((t) => (
-          <Text key={t} style={gcard.tag}>{t}</Text>
-        ))}
-      </View>
-
-      {/* Location */}
-      <View style={gcard.locationRow}>
-        <Ionicons name="location" size={13} color="#FFAC30" />
-        <Text style={gcard.locationName}>{gathering.location.name}</Text>
-        {distanceM !== null && (
-          <>
-            <View style={gcard.dot} />
-            <Text style={gcard.locationDist}>{formatDistanceM(distanceM)}</Text>
-          </>
+        {/* Flash deadline countdown */}
+        {gathering.type === 'flash' && gathering.deadlineMs && (
+          <View style={gcard.deadlineRow}>
+            <Ionicons name="time-outline" size={13} color="#FF8C00" />
+            <Text style={gcard.deadlineText}>
+              {formatTimeLeft(gathering.deadlineMs)} 남음 · 마감 시 자동 삭제
+            </Text>
+          </View>
         )}
-      </View>
+
+        <Text style={gcard.content}>{gathering.description}</Text>
+
+        {/* Tags */}
+        <View style={gcard.tagRow}>
+          {gathering.tags.map((t) => (
+            <Text key={t} style={gcard.tag}>{t}</Text>
+          ))}
+        </View>
+
+        {/* Location */}
+        <View style={gcard.locationRow}>
+          <Ionicons name="location" size={13} color="#FFAC30" />
+          <Text style={gcard.locationName}>{gathering.location.name}</Text>
+          {distanceM !== null && (
+            <>
+              <View style={gcard.dot} />
+              <Text style={gcard.locationDist}>{formatDistanceM(distanceM)}</Text>
+            </>
+          )}
+        </View>
+      </TouchableOpacity>
 
       {/* Actions row */}
       <View style={gcard.actions}>
@@ -1050,6 +1055,7 @@ const modal = StyleSheet.create({
 
 const cat = StyleSheet.create({
   strip: {
+    flexShrink: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#D4D4D4',
   },
@@ -1057,6 +1063,7 @@ const cat = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 8,
+    alignItems: 'center',
   },
   chip: {
     flexDirection: 'row',
