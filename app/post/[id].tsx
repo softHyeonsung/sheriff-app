@@ -21,6 +21,7 @@ import { MOCK_COMMENTS_MAP, MOCK_POSTS } from '../../src/constants/mockPosts';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMapStore } from '../../src/store/mapStore';
 import { usePostStore } from '../../src/store/postStore';
+import MiniMap from '../../src/components/MiniMap';
 
 function LassoIcon({ size = 20, color = '#B89060' }: { size?: number; color?: string }) {
   return (
@@ -175,21 +176,38 @@ export default function PostDetailScreen() {
               </View>
             )}
 
-            {/* Location card */}
-            <View style={styles.locationCard}>
-              <Ionicons name="location" size={16} color="#FFAC30" />
-              <View style={styles.locationCardInfo}>
-                <Text style={styles.locationCardName}>{post.location.name}</Text>
-                {post.locationPin && (
-                  <Text style={styles.locationCardAddr} numberOfLines={1}>
-                    {post.locationPin.road_address_name || post.locationPin.address_name}
-                  </Text>
-                )}
+            {/* Location */}
+            {post.locationPin ? (
+              <View style={styles.locationWrap}>
+                <MiniMap
+                  lat={parseFloat(post.locationPin.y)}
+                  lng={parseFloat(post.locationPin.x)}
+                  title={post.location.name}
+                  height={180}
+                  onExpand={() => router.replace('/(tabs)')}
+                />
+                <View style={styles.locationMeta}>
+                  <Ionicons name="location" size={14} color="#FFAC30" />
+                  <View style={styles.locationMetaInfo}>
+                    <Text style={styles.locationMetaName}>{post.location.name}</Text>
+                    <Text style={styles.locationMetaAddr} numberOfLines={1}>
+                      {post.locationPin.road_address_name || post.locationPin.address_name}
+                    </Text>
+                  </View>
+                  <View style={styles.locationDistBadge}>
+                    <Text style={styles.locationDistText}>{post.location.distance}</Text>
+                  </View>
+                </View>
               </View>
-              <View style={styles.locationDistBadge}>
-                <Text style={styles.locationDistText}>{post.location.distance}</Text>
+            ) : (
+              <View style={styles.locationCard}>
+                <Ionicons name="location" size={14} color="#FFAC30" />
+                <Text style={styles.locationMetaName}>{post.location.name}</Text>
+                <View style={styles.locationDistBadge}>
+                  <Text style={styles.locationDistText}>{post.location.distance}</Text>
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Divider */}
             <View style={styles.divider} />
@@ -407,11 +425,44 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
   tag: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Medium', color: '#A36E1D' },
 
-  // Location card
+  // Location
+  locationWrap: { marginBottom: 4 },
+  locationMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 2,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  locationMetaInfo: { flex: 1 },
+  locationMetaName: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+    marginBottom: 1,
+  },
+  locationMetaAddr: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#7A5C38',
+  },
+  locationDistBadge: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexShrink: 0,
+  },
+  locationDistText: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#7A5C38',
+  },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     backgroundColor: '#FFFBF3',
     borderWidth: 1,
     borderColor: '#FFE0A0',
@@ -419,31 +470,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 4,
-  },
-  locationCardInfo: { flex: 1 },
-  locationCardName: {
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#1A1108',
-    marginBottom: 2,
-  },
-  locationCardAddr: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
-  },
-  locationDistBadge: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  locationDistText: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#7A5C38',
   },
 
   // Divider

@@ -21,6 +21,7 @@ import {
 } from '../../src/constants/mockGatherings';
 import { useAuthStore } from '../../src/store/authStore';
 import { useGatheringStore } from '../../src/store/gatheringStore';
+import MiniMap from '../../src/components/MiniMap';
 
 // ── Category icon map ──────────────────────────────────────────────────────────
 
@@ -345,23 +346,16 @@ export default function GatheringDetailScreen() {
         {/* ── 장소 안내 ── */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>장소 안내</Text>
-          <View style={styles.locationCard}>
-            <View style={styles.locationIconWrap}>
-              <Ionicons name="location" size={22} color="#FFAC30" />
-            </View>
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationName}>{gathering.location.name}</Text>
-              <Text style={styles.locationCoords}>
-                {gathering.location.lat.toFixed(4)}°N, {gathering.location.lng.toFixed(4)}°E
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.mapBtn}
-              onPress={() => router.push('/(tabs)')}
-            >
-              <Ionicons name="map-outline" size={14} color="#FFAC30" style={{ marginRight: 4 }} />
-              <Text style={styles.mapBtnText}>지도에서 보기</Text>
-            </TouchableOpacity>
+          <MiniMap
+            lat={gathering.location.lat}
+            lng={gathering.location.lng}
+            title={gathering.location.name}
+            height={210}
+            onExpand={() => router.replace('/(tabs)')}
+          />
+          <View style={styles.locationMeta}>
+            <Ionicons name="location" size={15} color="#FFAC30" />
+            <Text style={styles.locationName}>{gathering.location.name}</Text>
           </View>
         </View>
 
@@ -736,41 +730,18 @@ const styles = StyleSheet.create({
   },
 
   // Location
-  locationCard: {
+  locationMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#FFFBF3',
-    borderWidth: 1,
-    borderColor: '#FFE0A0',
-    borderRadius: 16,
-    padding: 16,
+    gap: 6,
+    paddingTop: 12,
   },
-  locationIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FFE0A0',
-    flexShrink: 0,
+  locationName: {
+    fontSize: 14,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+    flex: 1,
   },
-  locationInfo: { flex: 1 },
-  locationName: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108', marginBottom: 3 },
-  locationCoords: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
-  mapBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FFE0A0',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  mapBtnText: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#A36E1D' },
 
   // Sticky CTA
   stickyBottom: {
