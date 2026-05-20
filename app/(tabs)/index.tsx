@@ -20,13 +20,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadSavedPins } from '../../src/api/savedPlaces';
 import { fetchNearbyTourSpots } from '../../src/api/tourApi';
 import KOREA_DISTRICTS from '../../src/constants/koreaDistricts';
-import { MOCK_GATHERINGS, haversineM } from '../../src/constants/mockGatherings';
+import { haversineM } from '../../src/constants/mockGatherings';
+import { FirestoreGathering, subscribeGatherings } from '../../src/api/gatherings';
 import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type MapMode = 'basic' | 'my_map' | 'gathering_quest';
+type MapMode = 'basic' | 'my_map' | 'gathering';
 
 type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -37,14 +38,13 @@ const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '6d840fb987
 
 const PIN_COLORS: Record<MapPin['type'], string> = {
   gathering: '#FFAC30',
-  quest:     '#A36E1D',
   saved:     '#4CAF6A',
 };
 
 const MODE_CONFIG: { mode: MapMode; icon: IoniconName; color: string; iconColor: string; label: string }[] = [
   { mode: 'basic',           icon: 'map',      color: '#4285F4', iconColor: '#FFFFFF',  label: '기본'        },
   { mode: 'my_map',          icon: 'bookmark', color: '#FFD700', iconColor: '#1A1108',  label: '내 지도'     },
-  { mode: 'gathering_quest', icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108',  label: '모임·퀘스트' },
+  { mode: 'gathering',       icon: 'compass',  color: '#FFAC30', iconColor: '#1A1108',  label: '모임' },
 ];
 
 const PLACE_CATEGORIES: { key: string; label: string; code: string }[] = [
@@ -160,9 +160,9 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
       markers.forEach(function(m) { m.setMap(null); });
       markers = [];
       var filtered = PINS.filter(function(pin) {
-        if (mode === 'my_map')          return pin.type === 'saved';
-        if (mode === 'gathering_quest') return pin.type === 'gathering' || pin.type === 'quest';
-        return pin.type === 'gathering' || pin.type === 'quest'; // basic: no saved pins
+        if (mode === 'my_map')      return pin.type === 'saved';
+        if (mode === 'gathering')   return pin.type === 'gathering';
+        return pin.type === 'gathering'; // basic: no saved pins
       });
       filtered.forEach(function(pin) {
         var markerSrc = (pin.type === 'gathering')
@@ -220,6 +220,7 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
         else if (msg.type === 'SHOW_PLACE_MARKERS') { showPlaceMarkers(msg.places); }
         else if (msg.type === 'CLEAR_PLACES')       { clearPlaceMarkers(); }
         else if (msg.type === 'UPDATE_APP_PINS')    { PINS = msg.pins; renderPins(currentMode); }
+        else if (msg.type === 'SET_DRAGGABLE')      { map.setDraggable(msg.enabled); }
       } catch (e) {}
     }
 
@@ -262,6 +263,7 @@ export default function MapScreen() {
 
   const router = useRouter();
 
+  const [gatherings, setGatherings] = useState<FirestoreGathering[]>([]);
   const [mode,               setMode]               = useState<MapMode>('basic');
   const modeRef              = useRef<MapMode>('basic');
   const [gatheringCatFilter, setGatheringCatFilter] = useState<string>('전체');
@@ -314,6 +316,12 @@ export default function MapScreen() {
     registerSend(send);
   }, [send, registerSend]);
 
+  // Subscribe to live gatherings for gathering mode pins
+  useEffect(() => {
+    const unsub = subscribeGatherings(setGatherings);
+    return unsub;
+  }, []);
+
   // Load saved places from Firestore on mount
   useEffect(() => {
     if (!currentUid) return;
@@ -353,6 +361,12 @@ export default function MapScreen() {
     return () => { subscriber?.remove(); };
   }, [mapReady]);
 
+  // Disable map drag while any area dropdown is open so the list scrolls instead of the map
+  useEffect(() => {
+    if (!mapReady) return;
+    send({ type: 'SET_DRAGGABLE', enabled: openDrop === null });
+  }, [openDrop, mapReady, send]);
+
   // Keep modeRef in sync for use inside effects that shouldn't re-run on mode changes
   useEffect(() => { modeRef.current = mode; }, [mode]);
 
@@ -371,23 +385,24 @@ export default function MapScreen() {
     }
   }, [mode, mapReady, send, clearPlaces]);
 
-  // Sync savedPlaces to WebView whenever they change (gathering_quest manages its own pins)
+  // Sync savedPlaces to WebView whenever they change (gathering manages its own pins)
   useEffect(() => {
     if (!mapReady) return;
-    if (modeRef.current === 'gathering_quest') return;
+    if (modeRef.current === 'gathering') return;
     send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...savedPlaces] });
   }, [mapReady, savedPlaces, send]);
 
-  // Gathering pins — compute 15 nearest and push when in gathering_quest mode
+  // Gathering pins — compute 15 nearest and push when in gathering mode
   useEffect(() => {
-    if (!mapReady || mode !== 'gathering_quest') return;
+    if (!mapReady || mode !== 'gathering') return;
     const now = Date.now();
     const loc = userLoc ?? SEOUL;
     const q = searchText.trim().toLowerCase();
 
-    const gPins: MapPin[] = MOCK_GATHERINGS
+    const gPins: MapPin[] = gatherings
       .filter((g) => {
-        if (g.type === 'flash' && g.deadlineMs && now > g.deadlineMs) return false;
+        if (g.status !== 'recruiting') return false;
+        if (g.type === 'flash' && g.deadline_ms && now > g.deadline_ms) return false;
         if (gatheringCatFilter === '⚡번개') return g.type === 'flash';
         if (gatheringCatFilter !== '전체') return g.category === gatheringCatFilter;
         return true;
@@ -412,7 +427,7 @@ export default function MapScreen() {
 
     const { savedPlaces: latestSaved } = useMapStore.getState();
     send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...latestSaved, ...gPins] });
-  }, [mode, mapReady, gatheringCatFilter, searchText, userLoc, send]);
+  }, [mode, mapReady, gatheringCatFilter, searchText, userLoc, gatherings, send]);
 
   // Auto-load nearby TourAPI recommended spots on first open
   useEffect(() => {
@@ -501,7 +516,7 @@ export default function MapScreen() {
   const handleSearch = async () => {
     const q = searchText.trim();
     if (!q) return;
-    if (modeRef.current === 'gathering_quest') return; // gathering useEffect handles filtering
+    if (modeRef.current === 'gathering') return; // gathering useEffect handles filtering
     setActiveCategory(null);
     const loc = userLoc ?? SEOUL;
     const url = `https://dapi.kakao.com/v2/local/search/keyword.json`
@@ -542,7 +557,7 @@ export default function MapScreen() {
   const visiblePinCount = mode === 'my_map'
     ? savedPlaces.length
     : MOCK_PINS.filter((p) => {
-        if (mode === 'gathering_quest') return p.type === 'gathering' || p.type === 'quest';
+        if (mode === 'gathering') return p.type === 'gathering';
         return true;
       }).length;
 
@@ -573,11 +588,11 @@ export default function MapScreen() {
       {/* ── Search bar + directions button ── */}
       <View style={[styles.searchRow, { top: insets.top + 12 }]}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color="#B89060" style={styles.searchIcon} />
+          <Ionicons name="search" size={18} color="#1A1108" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="장소, 모임 검색"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={searchText}
             onChangeText={setSearchText}
             returnKeyType="search"
@@ -597,7 +612,7 @@ export default function MapScreen() {
       </View>
 
       {/* ── Place category chips (basic / my_map) ── */}
-      {mode !== 'gathering_quest' && (
+      {mode !== 'gathering' && (
         <View style={[styles.categoryRow, { top: insets.top + 120 }]}>
           {PLACE_CATEGORIES.map((cat) => (
             <TouchableOpacity
@@ -615,8 +630,8 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* ── Gathering category chips (gathering_quest) ── */}
-      {mode === 'gathering_quest' && (
+      {/* ── Gathering category chips (gathering) ── */}
+      {mode === 'gathering' && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -641,17 +656,17 @@ export default function MapScreen() {
 
       {/* ── Area selector + 게시물 보기 (basic mode only) ── */}
       {mode === 'basic' && (
-        <View style={[styles.areaRow, { top: insets.top + 72 }]}>
+        <View style={[styles.areaRow, { top: insets.top + 72 }, openDrop !== null && styles.areaRowOpen]}>
 
           {/* 도 dropdown */}
-          <View style={styles.areaDropWrap}>
+          <View style={[styles.areaDropWrap, openDrop === 'do' && styles.areaDropWrapOpen]}>
             <TouchableOpacity
               style={styles.areaDropBtn}
               onPress={() => setOpenDrop(openDrop === 'do' ? null : 'do')}
               activeOpacity={0.85}
             >
               <Text style={styles.areaDropBtnText} numberOfLines={1}>{selectedDo ?? '도'}</Text>
-              <Ionicons name={openDrop === 'do' ? 'chevron-up' : 'chevron-down'} size={12} color="#7A5C38" />
+              <Ionicons name={openDrop === 'do' ? 'chevron-up' : 'chevron-down'} size={12} color="#1A1108" />
             </TouchableOpacity>
             {openDrop === 'do' && (
               <ScrollView style={styles.areaDropMenu} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -676,14 +691,14 @@ export default function MapScreen() {
           </View>
 
           {/* 시·군·구 dropdown */}
-          <View style={styles.areaDropWrap}>
+          <View style={[styles.areaDropWrap, openDrop === 'sigungu' && styles.areaDropWrapOpen]}>
             <TouchableOpacity
               style={[styles.areaDropBtn, !selectedDo && styles.areaDropBtnDisabled]}
               onPress={() => selectedDo && setOpenDrop(openDrop === 'sigungu' ? null : 'sigungu')}
               activeOpacity={0.85}
             >
               <Text style={styles.areaDropBtnText} numberOfLines={1}>{selectedSiGunGu ?? '시·군·구'}</Text>
-              <Ionicons name={openDrop === 'sigungu' ? 'chevron-up' : 'chevron-down'} size={12} color="#7A5C38" />
+              <Ionicons name={openDrop === 'sigungu' ? 'chevron-up' : 'chevron-down'} size={12} color="#1A1108" />
             </TouchableOpacity>
             {openDrop === 'sigungu' && (
               <ScrollView style={styles.areaDropMenu} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -707,14 +722,14 @@ export default function MapScreen() {
           </View>
 
           {/* 읍·면·동 dropdown */}
-          <View style={styles.areaDropWrap}>
+          <View style={[styles.areaDropWrap, openDrop === 'eupMyeonDong' && styles.areaDropWrapOpen]}>
             <TouchableOpacity
               style={[styles.areaDropBtn, !selectedSiGunGu && styles.areaDropBtnDisabled]}
               onPress={() => selectedSiGunGu && setOpenDrop(openDrop === 'eupMyeonDong' ? null : 'eupMyeonDong')}
               activeOpacity={0.85}
             >
               <Text style={styles.areaDropBtnText} numberOfLines={1}>{selectedEupMyeonDong ?? '읍·면·동'}</Text>
-              <Ionicons name={openDrop === 'eupMyeonDong' ? 'chevron-up' : 'chevron-down'} size={12} color="#7A5C38" />
+              <Ionicons name={openDrop === 'eupMyeonDong' ? 'chevron-up' : 'chevron-down'} size={12} color="#1A1108" />
             </TouchableOpacity>
             {openDrop === 'eupMyeonDong' && (
               <ScrollView style={styles.areaDropMenu} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
@@ -842,6 +857,7 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   gradient: {
     position: 'absolute',
     left: 0, right: 0, bottom: 0,
@@ -887,7 +903,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 2,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -910,6 +926,13 @@ const styles = StyleSheet.create({
   },
   areaDropWrap: {
     position: 'relative',
+  },
+  // When open: tall enough to contain button (~36) + menu top offset (40) + maxHeight (220)
+  areaDropWrapOpen: {
+    height: 270,
+  },
+  areaRowOpen: {
+    alignItems: 'flex-start',
   },
   areaDropBtn: {
     flexDirection: 'row',
@@ -966,7 +989,7 @@ const styles = StyleSheet.create({
   },
   areaDropItemTextActive: {
     fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#A36E1D',
+    color: '#1A1108',
   },
   viewPostsBtn: {
     flexDirection: 'row',
@@ -976,7 +999,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.18,
     shadowRadius: 4,
@@ -1054,7 +1077,7 @@ const styles = StyleSheet.create({
   categoryChipText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
   categoryChipTextActive: {
     color: '#1A1108',
@@ -1136,6 +1159,6 @@ const styles = StyleSheet.create({
   myMapEmptyHint: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
 });

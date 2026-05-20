@@ -1,4 +1,4 @@
-﻿// 경로: app/(tabs)/community.tsx
+// 경로: app/(tabs)/community.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
@@ -19,14 +19,21 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  MockGathering,
-  MOCK_GATHERINGS,
-  haversineM,
+  FirestoreGathering,
+  approveJoin,
+  cancelJoin,
+  openChatRoom,
+  rejectJoin,
+  requestJoin as apiRequestJoin,
+  subscribeGatherings,
+} from '../../src/api/gatherings';
+import { formatTimeAgo } from '../../src/api/posts';
+import { useAuthStore } from '../../src/store/authStore';
+import {
   formatDistanceM,
   formatTimeLeft,
+  haversineM,
 } from '../../src/constants/mockGatherings';
-import { useAuthStore } from '../../src/store/authStore';
-import { useGatheringStore } from '../../src/store/gatheringStore';
 
 const CATEGORIES = [
   { icon: 'apps' as const,            label: '전체' },
@@ -63,7 +70,7 @@ function CategoryStrip({
             onPress={() => onSelect(c.label)}
             accessibilityLabel={c.label}
           >
-            <Ionicons name={c.icon} size={15} color={active ? '#1A1108' : '#A36E1D'} />
+            <Ionicons name={c.icon} size={15} color="#1A1108" />
             <Text style={[cat.label, active && cat.labelActive]}>{c.label}</Text>
           </TouchableOpacity>
         );
@@ -75,26 +82,27 @@ function CategoryStrip({
 // ── ManageModal ───────────────────────────────────────────────────────────────
 
 function ManageModal({
-  gatheringId,
+  gathering,
   visible,
   onClose,
 }: {
-  gatheringId: string;
+  gathering: FirestoreGathering | null;
   visible: boolean;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const { gatherings, approveRequest, rejectRequest } = useGatheringStore();
-  const entry = gatherings[gatheringId];
-
   const [rejectingUid, setRejectingUid] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  if (!entry) return null;
+  if (!gathering) return null;
 
-  const handleApprove = (uid: string, nickname: string) => {
-    approveRequest(gatheringId, uid);
-    if (entry.hasChatRoom) {
+  const pending   = gathering.pending_requests;
+  const approved  = gathering.participants;
+  const hasChatRm = gathering.has_chat_room;
+
+  const handleApprove = async (uid: string, nickname: string) => {
+    await approveJoin(gathering.id, uid, nickname).catch(() => {});
+    if (hasChatRm) {
       Alert.alert('승인 완료', `${nickname}님이 채팅방에 자동으로 초대됐어요 ✓`);
     }
     setRejectingUid(null);
@@ -105,8 +113,8 @@ function ManageModal({
     setRejectReason('');
   };
 
-  const confirmReject = (uid: string) => {
-    rejectRequest(gatheringId, uid, rejectReason);
+  const confirmReject = async (uid: string) => {
+    await rejectJoin(gathering.id, uid, rejectReason).catch(() => {});
     setRejectingUid(null);
     setRejectReason('');
   };
@@ -138,23 +146,22 @@ function ManageModal({
           keyboardShouldPersistTaps="handled"
         >
           {/* ── 신청 중 ── */}
-          <Text style={modal.sectionLabel}>신청 중 ({entry.pendingRequests.length}명)</Text>
+          <Text style={modal.sectionLabel}>신청 중 ({pending.length}명)</Text>
 
-          {entry.pendingRequests.length === 0 ? (
+          {pending.length === 0 ? (
             <View style={modal.emptyRow}>
               <Text style={modal.emptyText}>대기 중인 신청이 없어요</Text>
             </View>
           ) : (
-            entry.pendingRequests.map((req) => (
+            pending.map((req) => (
               <View key={req.uid} style={modal.requestCard}>
-                {/* Request row */}
                 <View style={modal.requestRow}>
                   <View style={modal.reqAvatar}>
-                    <Ionicons name="person" size={18} color="#B89060" />
+                    <Ionicons name="person" size={18} color="#1A1108" />
                   </View>
                   <View style={modal.reqInfo}>
                     <Text style={modal.reqName}>{req.nickname}</Text>
-                    <Text style={modal.reqTime}>{req.requestedAt}</Text>
+                    <Text style={modal.reqTime}>{req.requested_at}</Text>
                   </View>
                   <TouchableOpacity
                     style={modal.approveBtn}
@@ -179,13 +186,12 @@ function ManageModal({
                   </TouchableOpacity>
                 </View>
 
-                {/* Rejection reason input */}
                 {rejectingUid === req.uid && (
                   <View style={modal.reasonRow}>
                     <TextInput
                       style={modal.reasonInput}
                       placeholder="거절 사유 (선택)"
-                      placeholderTextColor="#B89060"
+                      placeholderTextColor="#1A1108"
                       value={rejectReason}
                       onChangeText={setRejectReason}
                       returnKeyType="done"
@@ -196,7 +202,7 @@ function ManageModal({
                       style={modal.cancelRejectBtn}
                       onPress={() => setRejectingUid(null)}
                     >
-                      <Ionicons name="close" size={16} color="#B89060" />
+                      <Ionicons name="close" size={16} color="#1A1108" />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -204,19 +210,19 @@ function ManageModal({
             ))
           )}
 
-          {/* ── 승인된 멤버 ── */}
-          {entry.approvedMembers.length > 0 && (
+          {/* ── 참여 확정 멤버 ── */}
+          {approved.length > 0 && (
             <>
               <Text style={[modal.sectionLabel, { marginTop: 28 }]}>
-                승인된 멤버 ({entry.approvedMembers.length}명)
+                참여 확정 ({approved.length}명)
               </Text>
-              {entry.approvedMembers.map((m) => (
+              {approved.map((m) => (
                 <View key={m.uid} style={modal.approvedRow}>
                   <View style={[modal.reqAvatar, modal.reqAvatarApproved]}>
-                    <Ionicons name="person" size={18} color="#A36E1D" />
+                    <Ionicons name="person" size={18} color="#1A1108" />
                   </View>
                   <Text style={modal.approvedName}>{m.nickname}</Text>
-                  {entry.hasChatRoom && (
+                  {hasChatRm && (
                     <View style={modal.chatBadge}>
                       <Ionicons name="chatbubble" size={11} color="#FFAC30" />
                       <Text style={modal.chatBadgeText}>채팅 초대됨</Text>
@@ -227,10 +233,9 @@ function ManageModal({
             </>
           )}
 
-          {/* ── 채팅 안내 ── (when chat exists, new approvals are auto-added) */}
-          {entry.hasChatRoom && entry.pendingRequests.length > 0 && (
+          {hasChatRm && pending.length > 0 && (
             <View style={modal.chatNotice}>
-              <Ionicons name="information-circle-outline" size={16} color="#A36E1D" />
+              <Ionicons name="information-circle-outline" size={16} color="#1A1108" />
               <Text style={modal.chatNoticeText}>
                 채팅방이 열려 있어요. 승인하면 자동으로 초대됩니다.
               </Text>
@@ -247,41 +252,47 @@ function ManageModal({
 function GatheringCard({
   gathering,
   distanceM,
+  myUid,
+  myNick,
   onManage,
 }: {
-  gathering: MockGathering;
+  gathering: FirestoreGathering;
   distanceM: number | null;
+  myUid: string;
+  myNick: string;
   onManage: () => void;
 }) {
   const router = useRouter();
-  const entry = useGatheringStore((s) => s.gatherings[gathering.id]);
-  const { requestJoin, cancelRequest, createChatRoom } = useGatheringStore();
-  const uid = useAuthStore(
-    (s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : 'guest'),
-  );
 
-  const participantCount = entry?.participantCount ?? 0;
-  const maxMembers = gathering.maxMembers;
-  const isFull = participantCount >= maxMembers;
-  const pendingCount = entry?.pendingRequests.length ?? 0;
-  const hasChatRoom = entry?.hasChatRoom ?? false;
-  const canCreateChat = participantCount >= 2 && !hasChatRoom;
+  const isOwn          = gathering.host_id === myUid;
+  const participantCnt = gathering.participants.length;
+  const maxMembers     = gathering.max_members;
+  const isFull         = participantCnt >= maxMembers;
+  const pendingCount   = gathering.pending_requests.length;
+  const hasChatRoom    = gathering.has_chat_room;
+  const canCreateChat  = participantCnt >= 2 && !hasChatRoom;
 
-  // Non-host status
-  const isPending = entry?.pendingRequests.some((r) => r.uid === uid) ?? false;
-  const isApproved = entry?.approvedMembers.some((m) => m.uid === uid) ?? false;
-  const rejectionReason = entry?.rejections[uid];
-  const isRejected = !!rejectionReason;
+  const isPending        = gathering.pending_requests.some((r) => r.uid === myUid);
+  const isApproved       = !isOwn && gathering.participants.some((p) => p.uid === myUid);
+  const rejectionReason  = gathering.rejections[myUid];
+  const isRejected       = !!rejectionReason;
 
-  const handleJoinPress = () => {
+  const handleJoinPress = async () => {
+    if (myUid === 'guest') return;
     if (isPending) {
-      cancelRequest(gathering.id, uid);
+      await cancelJoin(gathering.id, myUid).catch(() => {});
     } else if (!isFull && !isApproved && !isRejected) {
-      requestJoin(gathering.id, uid, '나');
+      await apiRequestJoin(gathering.id, myUid, myNick).catch(() => {});
     }
   };
 
-  // Derive join button appearance
+  const handleOpenChat = async () => {
+    if (!hasChatRoom) {
+      await openChatRoom(gathering.id).catch(() => {});
+      Alert.alert('채팅방이 만들어졌어요!', '승인된 멤버들에게 알림이 전송됩니다 ✓');
+    }
+  };
+
   type JoinVariant = 'default' | 'pending' | 'approved' | 'rejected' | 'full';
   let variant: JoinVariant = 'default';
   let joinLabel = '참여 신청';
@@ -292,37 +303,36 @@ function GatheringCard({
   const joinDisabled = variant === 'full' || variant === 'approved' || variant === 'rejected';
 
   return (
-    <View style={[gcard.wrap, gathering.host.isSheriff && gcard.wrapSheriff]}>
-      {/* Tappable content area → gathering detail */}
+    <View style={[gcard.wrap, gathering.host_is_sheriff && gcard.wrapSheriff]}>
       <TouchableOpacity activeOpacity={0.97} onPress={() => router.push({ pathname: '/gathering/[id]', params: { id: gathering.id } })}>
         {/* Author row */}
         <View style={gcard.authorRow}>
-          <View style={[gcard.avatar, gathering.host.isSheriff && gcard.avatarSheriff]}>
-            <Ionicons name="person" size={18} color={gathering.host.isSheriff ? '#A36E1D' : '#B89060'} />
+          <View style={[gcard.avatar, gathering.host_is_sheriff && gcard.avatarSheriff]}>
+            <Ionicons name="person" size={18} color="#1A1108" />
           </View>
           <View style={gcard.authorInfo}>
             <View style={gcard.authorNameRow}>
-              <Text style={gcard.authorName}>{gathering.host.nickname}</Text>
-              {gathering.host.isSheriff && (
+              <Text style={gcard.authorName}>{gathering.host_nickname}</Text>
+              {gathering.host_is_sheriff && (
                 <Image
                   source={require('../../assets/images/sheriff_verified.jpg')}
                   style={gcard.sheriffBadge}
                 />
               )}
-              {gathering.isOwn && (
+              {isOwn && (
                 <View style={gcard.myBadge}>
                   <Text style={gcard.myBadgeText}>내 모임</Text>
                 </View>
               )}
             </View>
-            <Text style={gcard.meta}>{gathering.timeAgo} · {gathering.category}</Text>
+            <Text style={gcard.meta}>{formatTimeAgo(gathering.created_at)} · {gathering.category}</Text>
           </View>
           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#B89060" />
+            <Ionicons name="ellipsis-horizontal" size={18} color="#1A1108" />
           </TouchableOpacity>
         </View>
 
-        {/* Title (flash: ⚡ icon prefix) */}
+        {/* Title */}
         <View style={gcard.titleRow}>
           {gathering.type === 'flash' && (
             <Ionicons name="flash" size={15} color="#FF8C00" style={{ marginTop: 2 }} />
@@ -332,26 +342,24 @@ function GatheringCard({
           </Text>
         </View>
 
-        {/* Flash deadline countdown */}
-        {gathering.type === 'flash' && gathering.deadlineMs && (
+        {/* Flash deadline */}
+        {gathering.type === 'flash' && gathering.deadline_ms && (
           <View style={gcard.deadlineRow}>
             <Ionicons name="time-outline" size={13} color="#FF8C00" />
             <Text style={gcard.deadlineText}>
-              {formatTimeLeft(gathering.deadlineMs)} 남음 · 마감 시 자동 삭제
+              {formatTimeLeft(gathering.deadline_ms)} 남음 · 마감 시 자동 삭제
             </Text>
           </View>
         )}
 
         <Text style={gcard.content}>{gathering.description}</Text>
 
-        {/* Tags */}
         <View style={gcard.tagRow}>
           {gathering.tags.map((t) => (
             <Text key={t} style={gcard.tag}>{t}</Text>
           ))}
         </View>
 
-        {/* Location */}
         <View style={gcard.locationRow}>
           <Ionicons name="location" size={13} color="#FFAC30" />
           <Text style={gcard.locationName}>{gathering.location.name}</Text>
@@ -367,17 +375,16 @@ function GatheringCard({
       {/* Actions row */}
       <View style={gcard.actions}>
         <View style={gcard.actionBtn}>
-          <Ionicons name="calendar-outline" size={16} color="#B89060" />
-          <Text style={gcard.actionText}>{gathering.meetingAt}</Text>
+          <Ionicons name="calendar-outline" size={16} color="#1A1108" />
+          <Text style={gcard.actionText}>{gathering.meeting_at}</Text>
         </View>
         <View style={gcard.actionBtn}>
-          <Ionicons name="people-outline" size={17} color="#B89060" />
-          <Text style={gcard.actionText}>{participantCount}/{maxMembers}</Text>
+          <Ionicons name="people-outline" size={17} color="#1A1108" />
+          <Text style={gcard.actionText}>{participantCnt}/{maxMembers}</Text>
         </View>
 
         <View style={gcard.actionsRight}>
-          {gathering.isOwn ? (
-            // Host: manage button
+          {isOwn ? (
             <TouchableOpacity
               style={[gcard.manageBtn, pendingCount > 0 && gcard.manageBtnAlert]}
               onPress={onManage}
@@ -385,7 +392,7 @@ function GatheringCard({
               <Ionicons
                 name="people"
                 size={14}
-                color={pendingCount > 0 ? '#FFFFFF' : '#A36E1D'}
+                color={pendingCount > 0 ? '#FFFFFF' : '#1A1108'}
                 style={{ marginRight: 4 }}
               />
               <Text style={[gcard.manageBtnText, pendingCount > 0 && gcard.manageBtnTextAlert]}>
@@ -393,7 +400,6 @@ function GatheringCard({
               </Text>
             </TouchableOpacity>
           ) : (
-            // Non-host: join button
             <TouchableOpacity
               style={[
                 gcard.joinBtn,
@@ -420,16 +426,11 @@ function GatheringCard({
         </View>
       </View>
 
-      {/* Host: chat button (below actions) */}
-      {gathering.isOwn && (canCreateChat || hasChatRoom) && (
+      {/* Host: chat button */}
+      {isOwn && (canCreateChat || hasChatRoom) && (
         <TouchableOpacity
           style={[gcard.chatBtn, hasChatRoom && gcard.chatBtnActive]}
-          onPress={() => {
-            if (!hasChatRoom) {
-              createChatRoom(gathering.id);
-              Alert.alert('채팅방이 만들어졌어요!', '승인된 멤버들에게 알림이 전송됩니다 ✓');
-            }
-          }}
+          onPress={handleOpenChat}
           activeOpacity={hasChatRoom ? 1 : 0.8}
         >
           <Ionicons
@@ -445,7 +446,7 @@ function GatheringCard({
       )}
 
       {/* Non-host: rejection reason */}
-      {!gathering.isOwn && isRejected && (
+      {!isOwn && isRejected && (
         <View style={gcard.rejectionRow}>
           <Ionicons name="close-circle" size={13} color="#E05252" />
           <Text style={gcard.rejectionText}>거절 사유: {rejectionReason}</Text>
@@ -460,6 +461,7 @@ function GatheringCard({
 export default function CommunityScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [gatherings,      setGatherings]      = useState<FirestoreGathering[]>([]);
   const [searchText,       setSearchText]       = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [managingId,       setManagingId]       = useState<string | null>(null);
@@ -467,13 +469,19 @@ export default function CommunityScreen() {
   const [userCoords,       setUserCoords]       = useState<{ lat: number; lng: number } | null>(null);
   const [locStatus,        setLocStatus]        = useState<'loading' | 'ok' | 'denied'>('loading');
 
-  // 1-minute tick: keeps flash countdowns accurate + re-filters expired gatherings
+  const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : 'guest'));
+  const myNick = useAuthStore((s) => s.kakaoUser?.nickname ?? s.user?.displayName ?? '사용자');
+
+  useEffect(() => {
+    const unsub = subscribeGatherings(setGatherings);
+    return unsub;
+  }, []);
+
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  // Fetch current location once on mount
   useEffect(() => {
     Location.requestForegroundPermissionsAsync().then(({ status }) => {
       if (status !== 'granted') { setLocStatus('denied'); return; }
@@ -486,12 +494,11 @@ export default function CommunityScreen() {
     }).catch(() => setLocStatus('denied'));
   }, []);
 
-  // Filter + sort by distance (nearest first). Expired flash gatherings are excluded.
   const sorted = useMemo(() => {
     const now = Date.now();
-    return MOCK_GATHERINGS
+    return gatherings
       .filter((g) => {
-        if (g.type === 'flash' && g.deadlineMs && now > g.deadlineMs) return false;
+        if (g.type === 'flash' && g.deadline_ms && now > g.deadline_ms) return false;
         const matchesCat  = selectedCategory === '전체' || g.category === selectedCategory;
         const matchesText = !searchText.trim() ||
           g.title.includes(searchText) ||
@@ -511,20 +518,22 @@ export default function CommunityScreen() {
         return a.distanceM - b.distanceM;
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userCoords, searchText, selectedCategory, tick]);
+  }, [gatherings, userCoords, searchText, selectedCategory, tick]);
 
-  const hasGatherings = MOCK_GATHERINGS.length > 0;
+  const managingGathering = managingId
+    ? gatherings.find((g) => g.id === managingId) ?? null
+    : null;
 
   return (
     <View style={styles.container}>
       {/* ── Search bar ── */}
       <View style={[styles.searchWrap, { paddingTop: insets.top + 12 }]}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={17} color="#B89060" style={styles.searchIcon} />
+          <Ionicons name="search" size={17} color="#1A1108" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="모임 검색"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={searchText}
             onChangeText={setSearchText}
             returnKeyType="search"
@@ -542,7 +551,7 @@ export default function CommunityScreen() {
         <Ionicons
           name={locStatus === 'ok' ? 'location' : locStatus === 'loading' ? 'locate-outline' : 'location-outline'}
           size={13}
-          color={locStatus === 'ok' ? '#FFAC30' : '#B89060'}
+          color={locStatus === 'ok' ? '#FFAC30' : '#1A1108'}
         />
         <Text style={[styles.locText, locStatus === 'ok' && styles.locTextOk]}>
           {locStatus === 'loading' ? '위치 확인 중…' :
@@ -556,23 +565,18 @@ export default function CommunityScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
         showsVerticalScrollIndicator={false}
       >
-        {hasGatherings ? (
-          sorted.length > 0 ? (
-            sorted.map(({ gathering, distanceM }) => (
-              <GatheringCard
-                key={gathering.id}
-                gathering={gathering}
-                distanceM={distanceM}
-                onManage={() => setManagingId(gathering.id)}
-              />
-            ))
-          ) : (
-            <View style={styles.noResult}>
-              <Ionicons name="search" size={36} color="#B89060" />
-              <Text style={styles.noResultText}>검색 결과가 없어요</Text>
-            </View>
-          )
-        ) : (
+        {sorted.length > 0 ? (
+          sorted.map(({ gathering, distanceM }) => (
+            <GatheringCard
+              key={gathering.id}
+              gathering={gathering}
+              distanceM={distanceM}
+              myUid={uid}
+              myNick={myNick}
+              onManage={() => setManagingId(gathering.id)}
+            />
+          ))
+        ) : gatherings.length === 0 ? (
           <View style={styles.emptyWrap}>
             <View style={styles.emptyIconWrap}>
               <Ionicons name="people" size={44} color="#FFAC30" />
@@ -589,19 +593,14 @@ export default function CommunityScreen() {
               <Text style={styles.createBtnText}>첫 모임 만들기</Text>
             </TouchableOpacity>
           </View>
+        ) : (
+          <View style={styles.noResult}>
+            <Ionicons name="search" size={36} color="#1A1108" />
+            <Text style={styles.noResultText}>검색 결과가 없어요</Text>
+          </View>
         )}
 
-        {/* Quest teaser */}
-        <View style={styles.questBanner}>
-          <View style={styles.questBannerLeft}>
-            <Ionicons name="flash" size={24} color="#FFAC30" />
-            <View>
-              <Text style={styles.questBannerTitle}>퀘스트도 있어요</Text>
-              <Text style={styles.questBannerSub}>도움 요청하고 포인트 받기</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#A36E1D" />
-        </View>
+
       </ScrollView>
 
       {/* ── FAB ── */}
@@ -614,13 +613,11 @@ export default function CommunityScreen() {
       </TouchableOpacity>
 
       {/* ── Manage modal ── */}
-      {managingId && (
-        <ManageModal
-          gatheringId={managingId}
-          visible
-          onClose={() => setManagingId(null)}
-        />
-      )}
+      <ManageModal
+        gathering={managingGathering}
+        visible={managingId !== null}
+        onClose={() => setManagingId(null)}
+      />
     </View>
   );
 }
@@ -678,12 +675,12 @@ const gcard = StyleSheet.create({
   myBadgeText: {
     fontSize: 10,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#A36E1D',
+    color: '#1A1108',
   },
   meta: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
   titleRow: {
     flexDirection: 'row',
@@ -729,8 +726,8 @@ const gcard = StyleSheet.create({
   },
   tag: {
     fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#1A1108',
   },
   locationRow: {
     flexDirection: 'row',
@@ -742,13 +739,13 @@ const gcard = StyleSheet.create({
   locationName: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
-  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#B89060' },
+  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#1A1108' },
   locationDist: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
   actions: {
     flexDirection: 'row',
@@ -777,10 +774,8 @@ const gcard = StyleSheet.create({
   actionText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#B89060',
+    color: '#1A1108',
   },
-
-  // ── Manage button (host) ──
   manageBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -791,18 +786,9 @@ const gcard = StyleSheet.create({
     borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
-  manageBtnAlert: {
-    backgroundColor: '#FFAC30',
-    borderColor: '#FFAC30',
-  },
-  manageBtnText: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#A36E1D',
-  },
+  manageBtnAlert: { backgroundColor: '#FFAC30', borderColor: '#FFAC30' },
+  manageBtnText: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   manageBtnTextAlert: { color: '#FFFFFF' },
-
-  // ── Join button (non-host) ──
   joinBtn: {
     backgroundColor: '#FFAC30',
     paddingHorizontal: 14,
@@ -812,29 +798,13 @@ const gcard = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  joinBtnPending: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FFAC30',
-  },
-  joinBtnApproved: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#4CAF6A',
-  },
-  joinBtnMuted: {
-    backgroundColor: '#F5F5F5',
-  },
-  joinBtnText: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
+  joinBtnPending:  { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FFAC30' },
+  joinBtnApproved: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#4CAF6A' },
+  joinBtnMuted:    { backgroundColor: '#F5F5F5' },
+  joinBtnText:     { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   joinBtnTextPending:  { color: '#FFAC30' },
   joinBtnTextApproved: { color: '#4CAF6A' },
-  joinBtnTextMuted:    { color: '#B89060' },
-
-  // ── Chat button (host, below actions) ──
+  joinBtnTextMuted:    { color: '#1A1108' },
   chatBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -847,18 +817,9 @@ const gcard = StyleSheet.create({
     borderColor: '#D4D4D4',
     backgroundColor: '#FFFFFF',
   },
-  chatBtnActive: {
-    backgroundColor: '#FFAC30',
-    borderColor: '#FFAC30',
-  },
-  chatBtnText: {
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
+  chatBtnActive: { backgroundColor: '#FFAC30', borderColor: '#FFAC30' },
+  chatBtnText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   chatBtnTextActive: { color: '#1A1108' },
-
-  // ── Rejection reason ──
   rejectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -888,14 +849,9 @@ const modal = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#D4D4D4',
   },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
+  headerTitle: { fontSize: 17, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   scroll: { flex: 1 },
   content: { padding: 16, gap: 10 },
-
   sectionLabel: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
@@ -904,13 +860,7 @@ const modal = StyleSheet.create({
     marginBottom: 4,
   },
   emptyRow: { paddingVertical: 20, alignItems: 'center' },
-  emptyText: {
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
-  },
-
-  // Request card
+  emptyText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108' },
   requestCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -919,11 +869,7 @@ const modal = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
-  requestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  requestRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   reqAvatar: {
     width: 40,
     height: 40,
@@ -936,28 +882,10 @@ const modal = StyleSheet.create({
   },
   reqAvatarApproved: { borderColor: '#FFAC30' },
   reqInfo: { flex: 1 },
-  reqName: {
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
-  reqTime: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
-    marginTop: 2,
-  },
-  approveBtn: {
-    backgroundColor: '#FFAC30',
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-    borderRadius: 9,
-  },
-  approveBtnText: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
+  reqName: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
+  reqTime: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108', marginTop: 2 },
+  approveBtn: { backgroundColor: '#FFAC30', paddingHorizontal: 13, paddingVertical: 8, borderRadius: 9 },
+  approveBtnText: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   rejectBtn: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -967,19 +895,9 @@ const modal = StyleSheet.create({
     borderRadius: 9,
   },
   rejectBtnOpen: { borderColor: '#E05252' },
-  rejectBtnText: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
-  },
+  rejectBtnText: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Medium', color: '#1A1108' },
   rejectBtnTextOpen: { color: '#E05252', fontFamily: 'AppleSDGothicNeo-Bold' },
-
-  // Rejection reason input row
-  reasonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reasonInput: {
     flex: 1,
     height: 40,
@@ -1001,20 +919,8 @@ const modal = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D4D4D4',
   },
-
-  // Approved members
-  approvedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 6,
-  },
-  approvedName: {
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#1A1108',
-    flex: 1,
-  },
+  approvedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  approvedName: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#1A1108', flex: 1 },
   chatBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1024,13 +930,7 @@ const modal = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
   },
-  chatBadgeText: {
-    fontSize: 11,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
-  },
-
-  // Chat notice
+  chatBadgeText: { fontSize: 11, fontFamily: 'AppleSDGothicNeo-Medium', color: '#1A1108' },
   chatNotice: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1046,7 +946,7 @@ const modal = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#A36E1D',
+    color: '#1A1108',
     lineHeight: 20,
   },
 });
@@ -1054,17 +954,8 @@ const modal = StyleSheet.create({
 // ── Category strip styles ─────────────────────────────────────────────────────
 
 const cat = StyleSheet.create({
-  strip: {
-    flexShrink: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D4D4D4',
-  },
-  stripContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    alignItems: 'center',
-  },
+  strip: { flexShrink: 0, borderBottomWidth: 1, borderBottomColor: '#D4D4D4' },
+  stripContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8, alignItems: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1077,11 +968,7 @@ const cat = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   chipActive: { backgroundColor: '#FFAC30', borderColor: '#FFAC30' },
-  label: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
-  },
+  label: { fontSize: 13, lineHeight: 18, fontFamily: 'AppleSDGothicNeo-Medium', color: '#1A1108' },
   labelActive: { color: '#1A1108', fontFamily: 'AppleSDGothicNeo-Bold' },
 });
 
@@ -1123,23 +1010,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F5F5F5',
   },
-  locText: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
-  },
-  locTextOk: {
-    color: '#A36E1D',
-    fontFamily: 'AppleSDGothicNeo-Medium',
-  },
-
+  locText: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108' },
+  locTextOk: { color: '#1A1108', fontFamily: 'AppleSDGothicNeo-Medium' },
   content: { padding: 14 },
   noResult: { alignItems: 'center', paddingTop: 80, gap: 12 },
-  noResultText: {
-    fontSize: 15,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#B89060',
-  },
+  noResultText: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Medium', color: '#1A1108' },
   emptyWrap: { alignItems: 'center', paddingTop: 60 },
   emptyIconWrap: {
     width: 88,
@@ -1162,7 +1037,7 @@ const styles = StyleSheet.create({
   emptySub: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
@@ -1174,44 +1049,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 13,
     borderRadius: 14,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 3,
   },
-  createBtnText: {
-    fontSize: 15,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
-  questBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-    marginTop: 4,
-  },
-  questBannerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  questBannerTitle: {
-    fontSize: 15,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
-  questBannerSub: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
-  },
+  createBtnText: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   fab: {
     position: 'absolute',
     right: 20,
@@ -1221,7 +1065,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFAC30',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,

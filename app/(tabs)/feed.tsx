@@ -1,8 +1,9 @@
 ﻿// 경로: app/(tabs)/feed.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  FlatList,
   Image,
   ScrollView,
   StyleSheet,
@@ -10,67 +11,26 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
+import ShareModal from '../../src/components/ShareModal';
 import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
 import { savePostToFirestore, unsavePostFromFirestore } from '../../src/api/savedPosts';
-import { MockPost, MOCK_POSTS } from '../../src/constants/mockPosts';
+import {
+  FirestorePost,
+  formatTimeAgo,
+  subscribeFeedPosts,
+  toggleLike as toggleLikeFS,
+} from '../../src/api/posts';
 import { useAuthStore } from '../../src/store/authStore';
 import { PlaceResult, useMapStore } from '../../src/store/mapStore';
 import { usePostStore } from '../../src/store/postStore';
 
-// ── Mock stories ──────────────────────────────────────────────────────────────
-
-interface MockStory {
-  id: string;
-  nickname: string;
-  avatarSeed: string;
-  isSheriff: boolean;
-  isOwn?: boolean;
-}
-
-const MOCK_STORIES: MockStory[] = [
-  { id: 'own', nickname: '내 스토리', avatarSeed: 'me', isOwn: true, isSheriff: false },
-  { id: 's1', nickname: '동네탐험가', avatarSeed: 'explorer', isSheriff: true },
-  { id: 's2', nickname: '맛집헌터', avatarSeed: 'food', isSheriff: false },
-  { id: 's3', nickname: '주말산책러', avatarSeed: 'walk', isSheriff: true },
-  { id: 's4', nickname: '야경수집가', avatarSeed: 'night', isSheriff: true },
-  { id: 's5', nickname: '문화인', avatarSeed: 'culture', isSheriff: false },
-];
-
-function StoryStrip() {
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={story.strip}
-      contentContainerStyle={story.stripContent}
-    >
-      {MOCK_STORIES.map((s) => (
-        <TouchableOpacity key={s.id} style={story.item} activeOpacity={0.8}>
-          <View style={[story.avatarWrap, s.isSheriff && story.avatarSheriff]}>
-            {s.isOwn ? (
-              <View style={story.addWrap}>
-                <Ionicons name="add" size={26} color="#FFAC30" />
-              </View>
-            ) : (
-              <Image
-                source={{ uri: `https://picsum.photos/seed/${s.avatarSeed}/80/80` }}
-                style={story.avatar}
-              />
-            )}
-          </View>
-          <Text style={story.label} numberOfLines={1}>{s.nickname}</Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
-}
-
 // ── LassoIcon (Lucide lasso path, react-native-svg) ───────────────────────────
 
-function LassoIcon({ size = 19, color = '#B89060' }: { size?: number; color?: string }) {
+function LassoIcon({ size = 19, color = '#1A1108' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M7 22a5 5 0 0 1-2-4" />
@@ -82,16 +42,30 @@ function LassoIcon({ size = 19, color = '#B89060' }: { size?: number; color?: st
 
 // ── PostCard ───────────────────────────────────────────────────────────────────
 
-function PostCard({ post }: { post: MockPost }) {
+function PostCard({
+  post,
+  onShare,
+}: {
+  post: FirestorePost;
+  onShare: (p: FirestorePost) => void;
+}) {
   const router = useRouter();
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes);
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 28;
+  const [imgIndex, setImgIndex] = useState(0);
 
   const { savedPlaces, savePlace, unsavePlace } = useMapStore();
   const { savedPostIds, savePost, unsavePost } = usePostStore();
   const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
 
+  const liked = uid ? post.likes.includes(uid) : false;
+  const likeCount = post.likes.length;
   const bookmarked = savedPostIds.includes(post.id);
+
+  const handleToggleLike = async () => {
+    if (!uid) return;
+    await toggleLikeFS(post.id, uid, liked).catch(() => {});
+  };
 
   const toggleBookmark = async () => {
     if (bookmarked) {
@@ -103,65 +77,105 @@ function PostCard({ post }: { post: MockPost }) {
     }
   };
 
-  const isSaved = post.locationPin
-    ? savedPlaces.some((p) => p.id === post.locationPin!.id)
+  const isSaved = post.location_pin
+    ? savedPlaces.some((p) => p.id === post.location_pin!.id)
     : false;
 
-  const toggleLike = () => {
-    setLiked((v) => !v);
-    setLikeCount((n) => n + (liked ? -1 : 1));
-  };
-
   const toggleSavePlace = async () => {
-    if (!post.locationPin) return;
+    if (!post.location_pin) return;
     if (isSaved) {
-      unsavePlace(post.locationPin.id);
-      if (uid) await unsavePinFromFirestore(uid, post.locationPin.id).catch(() => {});
+      unsavePlace(post.location_pin.id);
+      if (uid) await unsavePinFromFirestore(uid, post.location_pin.id).catch(() => {});
     } else {
-      savePlace(post.locationPin);
+      const pin: PlaceResult = {
+        id: post.location_pin.id,
+        place_name: post.location_pin.place_name,
+        category_name: post.location_pin.category_name,
+        address_name: post.location_pin.address_name,
+        road_address_name: post.location_pin.road_address_name,
+        x: post.location_pin.x,
+        y: post.location_pin.y,
+      };
+      savePlace(pin);
       if (uid) {
-        const pin = {
-          id:       post.locationPin.id,
-          type:     'saved' as const,
-          lat:      parseFloat(post.locationPin.y),
-          lng:      parseFloat(post.locationPin.x),
-          title:    post.locationPin.place_name,
-          subtitle: post.locationPin.road_address_name || post.locationPin.address_name,
-        };
-        await savePinToFirestore(uid, pin).catch(() => {});
+        await savePinToFirestore(uid, {
+          id: pin.id,
+          type: 'saved',
+          lat: parseFloat(pin.y),
+          lng: parseFloat(pin.x),
+          title: pin.place_name,
+          subtitle: pin.road_address_name || pin.address_name,
+        }).catch(() => {});
       }
     }
   };
 
   return (
-    <View style={[card.wrap, post.author.isSheriff && card.wrapSheriff]}>
-      {/* Tappable content area → post detail */}
-      <TouchableOpacity activeOpacity={0.97} onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })}>
+    <View style={[card.wrap, post.author_is_sheriff && card.wrapSheriff]}>
+      <TouchableOpacity
+        activeOpacity={0.97}
+        onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })}
+      >
         {/* Author row */}
         <View style={card.authorRow}>
-          <View style={[card.avatar, post.author.isSheriff && card.avatarSheriff]}>
-            <Ionicons name="person" size={18} color={post.author.isSheriff ? '#A36E1D' : '#B89060'} />
+          <View style={[card.avatar, post.author_is_sheriff && card.avatarSheriff]}>
+            <Ionicons name="person" size={18} color="#1A1108" />
           </View>
           <View style={card.authorInfo}>
             <View style={card.authorNameRow}>
-              <Text style={card.authorName}>{post.author.nickname}</Text>
-              {post.author.isSheriff && (
-                <Image source={require('../../assets/images/sheriff_verified.jpg')} style={card.sheriffBadge} />
+              <Text style={card.authorName}>{post.author_nickname}</Text>
+              {post.author_is_sheriff && (
+                <Image
+                  source={require('../../assets/images/sheriff_verified.jpg')}
+                  style={card.sheriffBadge}
+                />
               )}
             </View>
-            <Text style={card.meta}>{post.timeAgo} · {post.contentType}</Text>
+            <Text style={card.meta}>{formatTimeAgo(post.timestamp)}</Text>
           </View>
           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#B89060" />
+            <Ionicons name="ellipsis-horizontal" size={18} color="#1A1108" />
           </TouchableOpacity>
         </View>
 
-        {/* Image */}
-        {post.imageUri && (
-          <Image source={{ uri: post.imageUri }} style={card.image} />
-        )}
+        {/* Images */}
+        {post.media_urls.length > 0 &&
+          (post.media_urls.length === 1 ? (
+            <Image source={{ uri: post.media_urls[0] }} style={card.image} />
+          ) : (
+            <View>
+              <FlatList
+                data={post.media_urls}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(_, i) => String(i)}
+                renderItem={({ item }) => (
+                  <Image
+                    source={{ uri: item }}
+                    style={{ width: cardWidth, aspectRatio: 4 / 3, backgroundColor: '#F5F5F5' }}
+                  />
+                )}
+                getItemLayout={(_, index) => ({
+                  length: cardWidth,
+                  offset: cardWidth * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / cardWidth);
+                  setImgIndex(idx);
+                }}
+                scrollEventThrottle={16}
+              />
+              <View style={card.dotsRow}>
+                {post.media_urls.map((_, i) => (
+                  <View key={i} style={[card.imgDot, i === imgIndex && card.imgDotActive]} />
+                ))}
+              </View>
+            </View>
+          ))}
 
-        {/* Content — hashtags stripped (shown as chips below) */}
+        {/* Content */}
         <Text style={card.content}>{post.content.replace(/#[\w가-힣]+/g, '').trim()}</Text>
 
         {/* Tags */}
@@ -172,42 +186,52 @@ function PostCard({ post }: { post: MockPost }) {
         </View>
 
         {/* Location */}
-        <View style={card.locationRow}>
-          <Ionicons name="location" size={13} color="#FFAC30" />
-          <Text style={card.locationName}>{post.location.name}</Text>
-          <View style={card.dot} />
-          <Text style={card.locationDist}>{post.location.distance}</Text>
-        </View>
+        {post.location.name ? (
+          <View style={card.locationRow}>
+            <Ionicons name="location" size={13} color="#FFAC30" />
+            <Text style={card.locationName}>{post.location.name}</Text>
+          </View>
+        ) : null}
       </TouchableOpacity>
 
       {/* Actions */}
       <View style={card.actions}>
-        {/* Left — social */}
-        <TouchableOpacity style={card.actionBtn} onPress={toggleLike}>
-          <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? '#E05252' : '#B89060'} />
+        <TouchableOpacity style={card.actionBtn} onPress={handleToggleLike}>
+          <Ionicons
+            name={liked ? 'heart' : 'heart-outline'}
+            size={20}
+            color={liked ? '#E05252' : '#1A1108'}
+          />
           <Text style={[card.actionText, liked && card.actionTextLiked]}>{likeCount}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={card.actionBtn}>
-          <Ionicons name="chatbubble-outline" size={19} color="#B89060" />
-          <Text style={card.actionText}>{post.comments}</Text>
+        <TouchableOpacity
+          style={card.actionBtn}
+          onPress={() =>
+            router.push({
+              pathname: '/post/[id]',
+              params: { id: post.id, scrollToComments: '1' },
+            })
+          }
+        >
+          <Ionicons name="chatbubble-outline" size={19} color="#1A1108" />
+          <Text style={card.actionText}>{post.comment_count}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={card.actionBtn} accessibilityLabel="공유">
-          <Ionicons name="paper-plane-outline" size={19} color="#B89060" />
+        <TouchableOpacity style={card.actionBtn} onPress={() => onShare(post)}>
+          <Ionicons name="paper-plane-outline" size={19} color="#1A1108" />
         </TouchableOpacity>
 
-        {/* Right — save */}
         <View style={card.actionsRight}>
-          {post.locationPin && (
-            <TouchableOpacity
-              style={card.actionBtn}
-              onPress={toggleSavePlace}
-              accessibilityLabel={isSaved ? '내 지도에서 제거' : '내 지도에 저장'}
-            >
-              <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#B89060'} />
+          {post.location_pin && (
+            <TouchableOpacity style={card.actionBtn} onPress={toggleSavePlace}>
+              <LassoIcon size={19} color={isSaved ? '#FFAC30' : '#1A1108'} />
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={card.actionBtn} onPress={toggleBookmark} accessibilityLabel="북마크">
-            <Ionicons name={bookmarked ? 'bookmark' : 'bookmark-outline'} size={19} color={bookmarked ? '#FFAC30' : '#B89060'} />
+          <TouchableOpacity style={card.actionBtn} onPress={toggleBookmark}>
+            <Ionicons
+              name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+              size={19}
+              color={bookmarked ? '#FFAC30' : '#1A1108'}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -221,27 +245,35 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
+  const [posts, setPosts] = useState<FirestorePost[]>([]);
+  const [sharePost, setSharePost] = useState<FirestorePost | null>(null);
+  const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
 
-  const hasPosts = MOCK_POSTS.length > 0;
+  useEffect(() => {
+    const unsub = subscribeFeedPosts(setPosts);
+    return unsub;
+  }, []);
+
+  const hasPosts = posts.length > 0;
 
   const filtered = searchText.trim()
-    ? MOCK_POSTS.filter((p) =>
+    ? posts.filter((p) =>
         p.content.includes(searchText) ||
         p.location.name.includes(searchText) ||
         p.tags.some((t) => t.includes(searchText))
       )
-    : MOCK_POSTS;
+    : posts;
 
   return (
     <View style={styles.container}>
       {/* ── Search bar ── */}
       <View style={[styles.searchWrap, { paddingTop: insets.top + 12 }]}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={17} color="#B89060" style={styles.searchIcon} />
+          <Ionicons name="search" size={17} color="#1A1108" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
             placeholder="게시물 검색"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={searchText}
             onChangeText={setSearchText}
             returnKeyType="search"
@@ -251,9 +283,6 @@ export default function FeedScreen() {
         </View>
       </View>
 
-      {/* ── Stories ── */}
-      <StoryStrip />
-
       {/* ── Content ── */}
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
@@ -261,10 +290,10 @@ export default function FeedScreen() {
       >
         {hasPosts ? (
           filtered.length > 0
-            ? filtered.map((post) => <PostCard key={post.id} post={post} />)
+            ? filtered.map((post) => <PostCard key={post.id} post={post} onShare={setSharePost} />)
             : (
               <View style={styles.noResult}>
-                <Ionicons name="search" size={36} color="#B89060" />
+                <Ionicons name="search" size={36} color="#1A1108" />
                 <Text style={styles.noResultText}>검색 결과가 없어요</Text>
               </View>
             )
@@ -296,6 +325,16 @@ export default function FeedScreen() {
       >
         <Ionicons name="add" size={26} color="#1A1108" />
       </TouchableOpacity>
+
+      {/* ── Share modal ── */}
+      <ShareModal
+        visible={sharePost !== null}
+        myUid={uid ?? ''}
+        shareText={sharePost
+          ? `[게시물 공유] ${sharePost.author_nickname}의 게시물\n"${sharePost.content.slice(0, 80)}${sharePost.content.length > 80 ? '...' : ''}"`
+          : ''}
+        onClose={() => setSharePost(null)}
+      />
     </View>
   );
 }
@@ -354,11 +393,33 @@ const card = StyleSheet.create({
   meta: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
   image: {
     width: '100%',
     aspectRatio: 4 / 3,
+    backgroundColor: '#FFFFFF',
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: 8,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 5,
+  },
+  imgDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+  },
+  imgDotActive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#FFFFFF',
   },
   content: {
@@ -378,8 +439,8 @@ const card = StyleSheet.create({
   },
   tag: {
     fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#1A1108',
   },
   locationRow: {
     flexDirection: 'row',
@@ -391,18 +452,18 @@ const card = StyleSheet.create({
   locationName: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
   dot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#B89060',
+    backgroundColor: '#1A1108',
   },
   locationDist: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
   actions: {
     flexDirection: 'row',
@@ -431,7 +492,7 @@ const card = StyleSheet.create({
   actionText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#B89060',
+    color: '#1A1108',
   },
   actionTextLiked: { color: '#E05252' },
 });
@@ -477,7 +538,7 @@ const styles = StyleSheet.create({
   noResultText: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#B89060',
+    color: '#1A1108',
   },
 
   emptyWrap: {
@@ -505,7 +566,7 @@ const styles = StyleSheet.create({
   emptySub: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 28,
@@ -517,7 +578,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 13,
     borderRadius: 14,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
@@ -538,7 +599,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFAC30',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
@@ -546,52 +607,3 @@ const styles = StyleSheet.create({
   },
 });
 
-// ── Story styles ──────────────────────────────────────────────────────────────
-
-const story = StyleSheet.create({
-  strip: {
-    flexShrink: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#D4D4D4',
-  },
-  stripContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 12,
-    alignItems: 'center',
-  },
-  item: {
-    alignItems: 'center',
-    width: 70,
-  },
-  avatarWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: '#D4D4D4',
-    overflow: 'hidden',
-    marginBottom: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-  },
-  avatarSheriff: {
-    borderColor: '#FFAC30',
-    borderWidth: 2.5,
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  addWrap: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 11,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
-    textAlign: 'center',
-  },
-});

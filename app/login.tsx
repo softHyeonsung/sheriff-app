@@ -129,7 +129,7 @@ export default function LoginScreen() {
   };
 
   const kakaoReady  = !!kakaoRequest  && KAKAO_REST_API_KEY    !== 'YOUR_KAKAO_REST_API_KEY';
-  const googleReady = !!googleRequest && GOOGLE_WEB_CLIENT_ID  !== 'YOUR_GOOGLE_WEB_CLIENT_ID';
+  const googleReady = !!googleRequest && !!GOOGLE_WEB_CLIENT_ID;
 
   return (
     <KeyboardAvoidingView
@@ -153,7 +153,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="이메일"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -164,7 +164,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="비밀번호"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
     marginTop: 6,
   },
   form: {
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 4,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   signupText: {
-    color: '#7A5C38',
+    color: '#1A1108',
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
   },
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     marginHorizontal: 12,
-    color: '#B89060',
+    color: '#1A1108',
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Medium',
   },

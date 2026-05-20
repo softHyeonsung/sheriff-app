@@ -1,8 +1,10 @@
 // 경로: app/post/[id].tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
+  FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -12,18 +14,29 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Path, Svg } from 'react-native-svg';
 import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
 import { savePostToFirestore, unsavePostFromFirestore } from '../../src/api/savedPosts';
-import { MOCK_COMMENTS_MAP, MOCK_POSTS } from '../../src/constants/mockPosts';
+import {
+  FirestoreComment,
+  FirestorePost,
+  addComment,
+  fetchPostById,
+  formatTimeAgo,
+  subscribeComments,
+  toggleLike as toggleLikeFS,
+} from '../../src/api/posts';
+import { fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMapStore } from '../../src/store/mapStore';
 import { usePostStore } from '../../src/store/postStore';
 import MiniMap from '../../src/components/MiniMap';
+import ShareModal from '../../src/components/ShareModal';
 
-function LassoIcon({ size = 20, color = '#B89060' }: { size?: number; color?: string }) {
+function LassoIcon({ size = 20, color = '#1A1108' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       <Path d="M7 22a5 5 0 0 1-2-4" />
@@ -34,26 +47,84 @@ function LassoIcon({ size = 20, color = '#B89060' }: { size?: number; color?: st
 }
 
 export default function PostDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, scrollToComments } = useLocalSearchParams<{ id: string; scrollToComments?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const post = MOCK_POSTS.find((p) => p.id === id);
-  const comments = MOCK_COMMENTS_MAP[id ?? ''] ?? [];
+  const scrollRef       = useRef<ScrollView>(null);
+  const commentInputRef = useRef<TextInput>(null);
+  const bodyYRef        = useRef(0);
+  const commentsYRef    = useRef(0);
 
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post?.likes ?? 0);
-  const [followed, setFollowed] = useState(false);
+  const [post,        setPost]        = useState<FirestorePost | null | undefined>(undefined);
+  const [comments,    setComments]    = useState<FirestoreComment[]>([]);
   const [commentText, setCommentText] = useState('');
+  const [submitting,  setSubmitting]  = useState(false);
+  const [myFollowing, setMyFollowing] = useState<string[]>([]);
+  const [showShare, setShowShare] = useState(false);
+  const { width: screenWidth } = useWindowDimensions();
+  const [imgIndex, setImgIndex] = useState(0);
 
   const { savedPlaces, savePlace, unsavePlace } = useMapStore();
-  const { savedPostIds, savePost, unsavePost } = usePostStore();
-  const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
+  const { savedPostIds, savePost, unsavePost }   = usePostStore();
+  const uid       = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
+  const nickname  = useAuthStore((s) => s.kakaoUser?.nickname ?? s.user?.displayName ?? '익명');
+  const [isSheriff, setIsSheriff] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    fetchPostById(id).then(setPost).catch(() => setPost(null));
+    const unsub = subscribeComments(id, setComments);
+    return unsub;
+  }, [id]);
+
+  useEffect(() => {
+    if (!uid) return;
+    fetchMyProfile(uid).then((p) => {
+      setMyFollowing(p?.following ?? []);
+      setIsSheriff((p?.badge_list ?? []).some((b) => /^sheriff_\d{4}_\d{2}$/.test(b)));
+    }).catch(() => {});
+  }, [uid]);
+
+  const isFollowingAuthor = post ? myFollowing.includes(post.author_id) : false;
+
+  const handleFollowAuthor = async () => {
+    if (!uid || !post || uid === post.author_id) return;
+    if (isFollowingAuthor) {
+      setMyFollowing((prev) => prev.filter((id) => id !== post.author_id));
+      await unfollowUser(uid, post.author_id).catch(() =>
+        setMyFollowing((prev) => [...prev, post.author_id])
+      );
+    } else {
+      setMyFollowing((prev) => [...prev, post.author_id]);
+      await followUser(uid, post.author_id).catch(() =>
+        setMyFollowing((prev) => prev.filter((id) => id !== post.author_id))
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (scrollToComments !== '1') return;
+    const t = setTimeout(() => {
+      const y = bodyYRef.current + commentsYRef.current;
+      scrollRef.current?.scrollTo({ y: y - 8, animated: true });
+      commentInputRef.current?.focus();
+    }, 350);
+    return () => clearTimeout(t);
+  }, [scrollToComments]);
+
+  if (post === undefined) {
+    return (
+      <View style={[styles.notFound, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color="#FFAC30" />
+      </View>
+    );
+  }
 
   if (!post) {
     return (
       <View style={[styles.notFound, { paddingTop: insets.top }]}>
-        <Ionicons name="alert-circle-outline" size={48} color="#B89060" />
+        <Ionicons name="alert-circle-outline" size={48} color="#1A1108" />
         <Text style={styles.notFoundText}>게시물을 찾을 수 없어요</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Text style={styles.backBtnText}>돌아가기</Text>
@@ -62,14 +133,20 @@ export default function PostDetailScreen() {
     );
   }
 
+  const liked     = uid ? post.likes.includes(uid) : false;
+  const likeCount = post.likes.length;
   const bookmarked = savedPostIds.includes(post.id);
-  const isSaved = post.locationPin
-    ? savedPlaces.some((p) => p.id === post.locationPin!.id)
+  const isSaved    = post.location_pin
+    ? savedPlaces.some((p) => p.id === post.location_pin!.id)
     : false;
+  const images = post.media_urls;
+  const displayContent = post.content.replace(/#[\w가-힣]+/g, '').trim();
 
-  const toggleLike = () => {
-    setLiked((v) => !v);
-    setLikeCount((n) => n + (liked ? -1 : 1));
+  const handleToggleLike = async () => {
+    if (!uid) return;
+    await toggleLikeFS(post.id, uid, liked).catch(() => {});
+    // Refresh post to get updated likes
+    fetchPostById(post.id).then(setPost).catch(() => {});
   };
 
   const toggleBookmark = async () => {
@@ -83,31 +160,59 @@ export default function PostDetailScreen() {
   };
 
   const toggleSavePlace = async () => {
-    if (!post.locationPin) return;
+    if (!post.location_pin) return;
     if (isSaved) {
-      unsavePlace(post.locationPin.id);
-      if (uid) unsavePinFromFirestore(uid, post.locationPin.id).catch(() => {});
+      unsavePlace(post.location_pin.id);
+      if (uid) unsavePinFromFirestore(uid, post.location_pin.id).catch(() => {});
     } else {
-      savePlace(post.locationPin);
+      const pin = {
+        id: post.location_pin.id,
+        place_name: post.location_pin.place_name,
+        category_name: post.location_pin.category_name,
+        address_name: post.location_pin.address_name,
+        road_address_name: post.location_pin.road_address_name,
+        x: post.location_pin.x,
+        y: post.location_pin.y,
+      };
+      savePlace(pin);
       if (uid) {
-        const pin = {
-          id: post.locationPin.id,
-          type: 'saved' as const,
-          lat: parseFloat(post.locationPin.y),
-          lng: parseFloat(post.locationPin.x),
-          title: post.locationPin.place_name,
-          subtitle: post.locationPin.road_address_name || post.locationPin.address_name,
-        };
-        savePinToFirestore(uid, pin).catch(() => {});
+        savePinToFirestore(uid, {
+          id: pin.id,
+          type: 'saved',
+          lat: parseFloat(pin.y),
+          lng: parseFloat(pin.x),
+          title: pin.place_name,
+          subtitle: pin.road_address_name || pin.address_name,
+        }).catch(() => {});
       }
     }
   };
 
-  const displayContent = post.content.replace(/#[\w가-힣]+/g, '').trim();
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || !uid || submitting) return;
+    setSubmitting(true);
+    try {
+      await addComment(post.id, uid, nickname, isSheriff, commentText.trim(), post.author_id);
+      setCommentText('');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const postShareText = post
+    ? `[게시물 공유]\n\n${post.content.slice(0, 80)}${post.content.length > 80 ? '...' : ''}`
+    : '';
 
   return (
     <View style={styles.root}>
-      {/* ── Header ── */}
+      <ShareModal
+        visible={showShare}
+        onClose={() => setShowShare(false)}
+        myUid={uid ?? ''}
+        shareText={postShareText}
+      />
+
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <TouchableOpacity
           style={styles.headerIconBtn}
@@ -119,49 +224,109 @@ export default function PostDetailScreen() {
         <Text style={styles.headerTitle}>게시물</Text>
         <TouchableOpacity
           style={styles.headerIconBtn}
+          onPress={() => setShowShare(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="paper-plane-outline" size={22} color="#1A1108" />
+          <Ionicons name="share-outline" size={24} color="#1A1108" />
         </TouchableOpacity>
       </View>
 
-      {/* ── Content + Comment input ── */}
       <KeyboardAvoidingView
         style={styles.kav}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {/* Hero image */}
-          {post.imageUri && (
-            <Image source={{ uri: post.imageUri }} style={styles.heroImage} />
+        <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
+          {/* Hero image carousel */}
+          {images.length > 0 && (
+            <View>
+              <FlatList
+                data={images}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(_, i) => String(i)}
+                renderItem={({ item }) => (
+                  <Image
+                    source={{ uri: item }}
+                    style={{ width: screenWidth, aspectRatio: 4 / 3, backgroundColor: '#F5F5F5' }}
+                  />
+                )}
+                onMomentumScrollEnd={(e) => {
+                  const idx = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+                  setImgIndex(idx);
+                }}
+              />
+              {images.length > 1 && (
+                <View style={styles.dotsRow}>
+                  {images.map((_, i) => (
+                    <View key={i} style={[styles.dot, i === imgIndex && styles.dotActive]} />
+                  ))}
+                </View>
+              )}
+            </View>
           )}
 
-          <View style={styles.body}>
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleToggleLike}>
+              <Ionicons
+                name={liked ? 'heart' : 'heart-outline'}
+                size={23}
+                color={liked ? '#E05252' : '#1A1108'}
+              />
+              <Text style={[styles.actionText, liked && styles.actionTextLiked]}>{likeCount}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn}>
+              <Ionicons name="chatbubble-outline" size={21} color="#1A1108" />
+              <Text style={styles.actionText}>{comments.length}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn}>
+              <Ionicons name="paper-plane-outline" size={21} color="#1A1108" />
+            </TouchableOpacity>
+            <View style={styles.actionsRight}>
+              {post.location_pin && (
+                <TouchableOpacity style={styles.actionBtn} onPress={toggleSavePlace}>
+                  <LassoIcon size={21} color={isSaved ? '#FFAC30' : '#1A1108'} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.actionBtn} onPress={toggleBookmark}>
+                <Ionicons
+                  name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                  size={21}
+                  color={bookmarked ? '#FFAC30' : '#1A1108'}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.body} onLayout={(e) => { bodyYRef.current = e.nativeEvent.layout.y; }}>
             {/* Author row */}
             <View style={styles.authorRow}>
-              <View style={[styles.authorAvatar, post.author.isSheriff && styles.authorAvatarSheriff]}>
-                <Ionicons name="person" size={22} color={post.author.isSheriff ? '#A36E1D' : '#B89060'} />
+              <View style={[styles.authorAvatar, post.author_is_sheriff && styles.authorAvatarSheriff]}>
+                <Ionicons name="person" size={22} color="#1A1108" />
               </View>
               <View style={styles.authorInfo}>
                 <View style={styles.nameRow}>
-                  <Text style={styles.authorName}>{post.author.nickname}</Text>
-                  {post.author.isSheriff && (
+                  <Text style={styles.authorName}>{post.author_nickname}</Text>
+                  {post.author_is_sheriff && (
                     <Image
                       source={require('../../assets/images/sheriff_verified.jpg')}
                       style={styles.sheriffBadge}
                     />
                   )}
                 </View>
-                <Text style={styles.authorMeta}>{post.timeAgo} · {post.contentType}</Text>
+                <Text style={styles.authorMeta}>{formatTimeAgo(post.timestamp)}</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.followBtn, followed && styles.followBtnActive]}
-                onPress={() => setFollowed((v) => !v)}
-              >
-                <Text style={[styles.followBtnText, followed && styles.followBtnTextActive]}>
-                  {followed ? '팔로잉' : '팔로우'}
-                </Text>
-              </TouchableOpacity>
+              {uid && post && uid !== post.author_id && (
+                <TouchableOpacity
+                  style={[styles.followBtn, isFollowingAuthor && styles.followBtnActive]}
+                  onPress={handleFollowAuthor}
+                >
+                  <Text style={[styles.followBtnText, isFollowingAuthor && styles.followBtnTextActive]}>
+                    {isFollowingAuthor ? '팔로잉' : '팔로우'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Content */}
@@ -177,11 +342,11 @@ export default function PostDetailScreen() {
             )}
 
             {/* Location */}
-            {post.locationPin ? (
+            {post.location_pin ? (
               <View style={styles.locationWrap}>
                 <MiniMap
-                  lat={parseFloat(post.locationPin.y)}
-                  lng={parseFloat(post.locationPin.x)}
+                  lat={parseFloat(post.location_pin.y)}
+                  lng={parseFloat(post.location_pin.x)}
                   title={post.location.name}
                   height={180}
                   onExpand={() => router.replace('/(tabs)')}
@@ -191,76 +356,32 @@ export default function PostDetailScreen() {
                   <View style={styles.locationMetaInfo}>
                     <Text style={styles.locationMetaName}>{post.location.name}</Text>
                     <Text style={styles.locationMetaAddr} numberOfLines={1}>
-                      {post.locationPin.road_address_name || post.locationPin.address_name}
+                      {post.location_pin.road_address_name || post.location_pin.address_name}
                     </Text>
-                  </View>
-                  <View style={styles.locationDistBadge}>
-                    <Text style={styles.locationDistText}>{post.location.distance}</Text>
                   </View>
                 </View>
               </View>
-            ) : (
+            ) : post.location.name ? (
               <View style={styles.locationCard}>
                 <Ionicons name="location" size={14} color="#FFAC30" />
                 <Text style={styles.locationMetaName}>{post.location.name}</Text>
-                <View style={styles.locationDistBadge}>
-                  <Text style={styles.locationDistText}>{post.location.distance}</Text>
-                </View>
               </View>
-            )}
+            ) : null}
 
-            {/* Divider */}
-            <View style={styles.divider} />
-
-            {/* Actions */}
-            <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionBtn} onPress={toggleLike}>
-                <Ionicons
-                  name={liked ? 'heart' : 'heart-outline'}
-                  size={23}
-                  color={liked ? '#E05252' : '#B89060'}
-                />
-                <Text style={[styles.actionText, liked && styles.actionTextLiked]}>{likeCount}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn}>
-                <Ionicons name="chatbubble-outline" size={21} color="#B89060" />
-                <Text style={styles.actionText}>{comments.length}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn}>
-                <Ionicons name="paper-plane-outline" size={21} color="#B89060" />
-              </TouchableOpacity>
-              <View style={styles.actionsRight}>
-                {post.locationPin && (
-                  <TouchableOpacity style={styles.actionBtn} onPress={toggleSavePlace}>
-                    <LassoIcon size={21} color={isSaved ? '#FFAC30' : '#B89060'} />
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.actionBtn} onPress={toggleBookmark}>
-                  <Ionicons
-                    name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-                    size={21}
-                    color={bookmarked ? '#FFAC30' : '#B89060'}
-                  />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Divider */}
-            {comments.length > 0 && <View style={styles.divider} />}
-
-            {/* Comments section */}
+            {/* Comments */}
             {comments.length > 0 && (
-              <View>
+              <View onLayout={(e) => { commentsYRef.current = e.nativeEvent.layout.y; }}>
+                <View style={styles.divider} />
                 <Text style={styles.commentsSectionTitle}>댓글 {comments.length}개</Text>
                 {comments.map((c) => (
                   <View key={c.id} style={styles.commentItem}>
-                    <View style={[styles.commentAvatar, c.author.isSheriff && styles.commentAvatarSheriff]}>
-                      <Ionicons name="person" size={15} color={c.author.isSheriff ? '#A36E1D' : '#B89060'} />
+                    <View style={[styles.commentAvatar, c.author_is_sheriff && styles.commentAvatarSheriff]}>
+                      <Ionicons name="person" size={15} color="#1A1108" />
                     </View>
                     <View style={styles.commentBody}>
                       <View style={styles.nameRow}>
-                        <Text style={styles.commentName}>{c.author.nickname}</Text>
-                        {c.author.isSheriff && (
+                        <Text style={styles.commentName}>{c.author_nickname}</Text>
+                        {c.author_is_sheriff && (
                           <Image
                             source={require('../../assets/images/sheriff_verified.jpg')}
                             style={styles.commentBadge}
@@ -269,52 +390,42 @@ export default function PostDetailScreen() {
                       </View>
                       <Text style={styles.commentText}>{c.text}</Text>
                       <View style={styles.commentMeta}>
-                        <Text style={styles.commentTime}>{c.timeAgo}</Text>
-                        {c.likes > 0 && (
-                          <>
-                            <View style={styles.metaDot} />
-                            <Text style={styles.commentLikesText}>좋아요 {c.likes}개</Text>
-                          </>
-                        )}
-                        <TouchableOpacity style={{ marginLeft: 10 }}>
-                          <Text style={styles.replyBtn}>답글 달기</Text>
-                        </TouchableOpacity>
+                        <Text style={styles.commentTime}>{formatTimeAgo(c.timestamp)}</Text>
                       </View>
                     </View>
-                    <TouchableOpacity style={styles.commentLikeBtn}>
-                      <Ionicons name="heart-outline" size={14} color="#B89060" />
-                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
             )}
           </View>
 
-          {/* Bottom spacer for input bar */}
           <View style={{ height: 80 }} />
         </ScrollView>
 
-        {/* ── Comment input bar ── */}
+        {/* Comment input bar */}
         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
           <View style={styles.inputAvatar}>
-            <Ionicons name="person" size={15} color="#B89060" />
+            <Ionicons name="person" size={15} color="#1A1108" />
           </View>
           <TextInput
+            ref={commentInputRef}
             style={styles.commentInput}
             placeholder="댓글 달기..."
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={commentText}
             onChangeText={setCommentText}
             returnKeyType="send"
+            onSubmitEditing={handleSubmitComment}
           />
           <TouchableOpacity
             style={styles.sendBtn}
-            disabled={!commentText.trim()}
+            disabled={!commentText.trim() || submitting}
+            onPress={handleSubmitComment}
           >
             <Ionicons
               name="send"
               size={20}
-              color={commentText.trim() ? '#FFAC30' : '#D4D4D4'}
+              color={commentText.trim() && !submitting ? '#FFAC30' : '#D4D4D4'}
             />
           </TouchableOpacity>
         </View>
@@ -334,16 +445,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
-  notFoundText: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Medium', color: '#7A5C38' },
-  backBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#FFAC30',
-    borderRadius: 14,
-  },
+  notFoundText: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Medium', color: '#1A1108' },
+  backBtn: { paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#FFAC30', borderRadius: 14 },
   backBtnText: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
 
-  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -354,35 +459,43 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#D4D4D4',
   },
-  headerIconBtn: {
-    width: 48,
-    height: 44,
+  headerIconBtn: { width: 48, height: 44, justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
+
+  dotsRow: {
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#D4D4D4' },
+  dotActive: { backgroundColor: '#FFAC30', width: 8, height: 8, borderRadius: 4 },
 
-  // Hero image
-  heroImage: {
-    width: '100%',
-    aspectRatio: 4 / 3,
-    backgroundColor: '#F5F5F5',
-  },
-
-  // Body
-  body: { padding: 16 },
-
-  // Author
-  authorRow: {
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
+    gap: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
   },
+  actionsRight: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', gap: 2 },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+    minHeight: 44,
+  },
+  actionText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
+  actionTextLiked: { color: '#E05252' },
+
+  body: { padding: 16 },
+
+  authorRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   authorAvatar: {
     width: 46,
     height: 46,
@@ -399,7 +512,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
   authorName: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   sheriffBadge: { width: 60, height: 20, resizeMode: 'contain' },
-  authorMeta: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
+  authorMeta: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108' },
   followBtn: {
     paddingHorizontal: 14,
     paddingVertical: 7,
@@ -412,7 +525,6 @@ const styles = StyleSheet.create({
   followBtnText: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Bold', color: '#FFAC30' },
   followBtnTextActive: { color: '#1A1108' },
 
-  // Content
   content: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',
@@ -420,12 +532,9 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 12,
   },
-
-  // Tags
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
-  tag: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Medium', color: '#A36E1D' },
+  tag: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
 
-  // Location
   locationWrap: { marginBottom: 4 },
   locationMeta: {
     flexDirection: 'row',
@@ -436,29 +545,8 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   locationMetaInfo: { flex: 1 },
-  locationMetaName: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#1A1108',
-    marginBottom: 1,
-  },
-  locationMetaAddr: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
-  },
-  locationDistBadge: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    flexShrink: 0,
-  },
-  locationDistText: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#7A5C38',
-  },
+  locationMetaName: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#1A1108', marginBottom: 1 },
+  locationMetaAddr: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108' },
   locationCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -472,36 +560,15 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Divider
   divider: { height: 1, backgroundColor: '#F5F5F5', marginVertical: 14 },
 
-  // Actions
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  actionsRight: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', gap: 2 },
-  actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 8,
-    minHeight: 44,
-  },
-  actionText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Medium', color: '#B89060' },
-  actionTextLiked: { color: '#E05252' },
-
-  // Comments
   commentsSectionTitle: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Bold',
     color: '#1A1108',
     marginBottom: 18,
   },
-  commentItem: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-    alignItems: 'flex-start',
-  },
+  commentItem: { flexDirection: 'row', gap: 10, marginBottom: 20, alignItems: 'flex-start' },
   commentAvatar: {
     width: 36,
     height: 36,
@@ -524,14 +591,9 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 5,
   },
-  commentMeta: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' },
-  commentTime: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
-  metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#D4D4D4', marginHorizontal: 5 },
-  commentLikesText: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
-  replyBtn: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#7A5C38' },
-  commentLikeBtn: { paddingTop: 4, paddingLeft: 4 },
+  commentMeta: { flexDirection: 'row', alignItems: 'center' },
+  commentTime: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108' },
 
-  // Input bar
   inputBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -563,11 +625,5 @@ const styles = StyleSheet.create({
     fontFamily: 'AppleSDGothicNeo-Regular',
     color: '#1A1108',
   },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
+  sendBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
 });

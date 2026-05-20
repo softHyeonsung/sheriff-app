@@ -42,13 +42,11 @@ const TAB_LABELS: Record<string, string> = {
 
 const PIN_COLORS: Record<MapPin['type'], string> = {
   gathering: '#FFAC30',
-  quest:     '#A36E1D',
   saved:     '#4CAF6A',
 };
 
 const PIN_LABELS: Record<MapPin['type'], string> = {
   gathering: '모임',
-  quest:     '퀘스트',
   saved:     '저장',
 };
 
@@ -125,15 +123,18 @@ function MapOverlaySheets() {
   const handleSavePlace = useCallback((place: PlaceResult) => {
     savePlace(place);
     if (currentUid) {
-      const pin = savedPlaces.find((p) => p.id === place.id)
-        ?? { id: place.id, type: 'saved' as const,
-             lat: parseFloat(place.y), lng: parseFloat(place.x),
-             title: place.place_name,
-             subtitle: place.road_address_name || place.address_name };
+      const pin = {
+        id: place.id,
+        type: 'saved' as const,
+        lat: parseFloat(place.y),
+        lng: parseFloat(place.x),
+        title: place.place_name,
+        subtitle: place.road_address_name || place.address_name,
+      };
       savePinToFirestore(currentUid, pin).catch((e) =>
         console.warn('[savedPlaces] Firestore save failed:', e));
     }
-  }, [savePlace, savedPlaces, currentUid]);
+  }, [savePlace, currentUid]);
 
   const handleUnsavePlace = useCallback((id: string) => {
     unsavePlace(id);
@@ -222,7 +223,7 @@ function MapOverlaySheets() {
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>검색 결과 {placeResults.length}개</Text>
               <TouchableOpacity onPress={handleCloseResults} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={22} color="#7A5C38" />
+                <Ionicons name="close" size={22} color="#1A1108" />
               </TouchableOpacity>
             </View>
             <FlatList
@@ -249,7 +250,7 @@ function MapOverlaySheets() {
                         : `${item.distance}m`}` : ''}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#B89060" />
+                  <Ionicons name="chevron-forward" size={16} color="#1A1108" />
                 </TouchableOpacity>
               )}
               ItemSeparatorComponent={() => <View style={styles.resultSep} />}
@@ -276,7 +277,7 @@ function MapOverlaySheets() {
                     <Text style={styles.pinTypeBadgeText}>{PIN_LABELS[selectedPin.type]}</Text>
                   </View>
                   <TouchableOpacity onPress={hideCard} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close" size={22} color="#7A5C38" />
+                    <Ionicons name="close" size={22} color="#1A1108" />
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.detailTitle}>{selectedPin.title}</Text>
@@ -313,7 +314,7 @@ function MapOverlaySheets() {
                     <Ionicons name="location" size={18} color="#FFAC30" />
                   </View>
                   <TouchableOpacity onPress={hideCard} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close" size={22} color="#7A5C38" />
+                    <Ionicons name="close" size={22} color="#1A1108" />
                   </TouchableOpacity>
                 </View>
                 <View style={styles.placeCardMeta}>
@@ -331,7 +332,7 @@ function MapOverlaySheets() {
                 </View>
                 <Text style={styles.detailTitle}>{selectedPlace.place_name}</Text>
                 <View style={styles.placeAddrRow}>
-                  <Ionicons name="map-outline" size={14} color="#B89060" style={{ marginRight: 5 }} />
+                  <Ionicons name="map-outline" size={14} color="#1A1108" style={{ marginRight: 5 }} />
                   <Text style={styles.detailSubtitle} numberOfLines={2}>
                     {selectedPlace.road_address_name || selectedPlace.address_name}
                   </Text>
@@ -388,7 +389,6 @@ export default function TabLayout() {
           headerTintColor: '#1A1108',
           headerTitleStyle: { fontFamily: 'AppleSDGothicNeo-Bold', fontSize: 18 },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: '#FFFFFF' },
         }}
       >
         {/* 1. 지도 — full-bleed, no header */}
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     paddingVertical: 10,
     paddingHorizontal: 8,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
   resultItemAddr: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
   resultSep: {
     height: 1,
@@ -570,17 +570,17 @@ const styles = StyleSheet.create({
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#B89060',
+    backgroundColor: '#1A1108',
   },
   placeCategory: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
   placeDistance: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
   placeAddrRow: {
     flexDirection: 'row',
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
   detailSubtitle: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
     flex: 1,
     lineHeight: 18,
   },
@@ -629,6 +629,6 @@ const styles = StyleSheet.create({
   detailSecondaryBtnText: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
 });
