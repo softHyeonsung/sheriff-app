@@ -39,6 +39,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9389ea76-7d4f-43fc-aaf3-2b5a6d1e0e3e"
+      }
+    },
+    "owner": "hyeonsung"
   }
 }
