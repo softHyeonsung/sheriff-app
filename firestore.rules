@@ -3,22 +3,23 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     match /users/{userId} {
-      // Firebase Auth users (email / Google / Apple) can read/write their own document
+      // 모든 인증 유저(Firebase Auth) — email/Google/Apple/Kakao Custom Token 공통
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 다른 유저 프로필은 읽기 허용 (팔로우, 검색 등)
+      allow read: if request.auth != null;
 
-      // Kakao users have no Firebase Auth token — allow writes only when the
-      // incoming uid field matches the document path (kakao_{kakaoId}).
-      // This is weaker than real auth but scoped: a caller must know the exact
-      // Kakao ID to write to that document, and can only write to their own path.
-      // TODO: replace with Firebase Custom Token (Cloud Function) before launch.
-      allow write: if userId.matches('kakao_.+')
-                   && request.resource.data.uid == userId;
-      allow read:  if userId.matches('kakao_.+');
-
-      // savedPins subcollection — same ownership rules
       match /savedPins/{pinId} {
         allow read, write, delete: if request.auth != null && request.auth.uid == userId;
-        allow read, write, delete: if userId.matches('kakao_.+');
+      }
+
+      match /daily_stats/{day} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // 알림: 본인만 읽기/업데이트, 타 유저도 생성 가능 (cross-user 알림)
+      match /notifications/{notifId} {
+        allow read, update: if request.auth != null && request.auth.uid == userId;
+        allow create:       if request.auth != null;
       }
     }
 
@@ -42,6 +43,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
                     && request.resource.data.host_id == request.auth.uid;
+      // 참여 신청/승인/취소 모두 update 필요 — Cloud Functions 이전 전까지 broad rule 유지
       allow update: if request.auth != null;
       allow delete: if request.auth != null
                     && resource.data.host_id == request.auth.uid;
@@ -68,6 +70,11 @@ service cloud.firestore {
         allow create: if request.auth != null
                       && request.resource.data.sender_id == request.auth.uid;
       }
+    }
+
+    match /place_saves/{placeId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
   }
 }

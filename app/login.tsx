@@ -19,7 +19,7 @@ WebBrowser.maybeCompleteAuthSession();
 // Google 웹 클라이언트 ID — Firebase Console > Authentication > Google > 웹 클라이언트 ID
 const GOOGLE_WEB_CLIENT_ID     = '847237699912-bebdqk9u4eqf9188eu3bt9tppt3e1aqr.apps.googleusercontent.com';
 const GOOGLE_IOS_CLIENT_ID     = '847237699912-q7o4uh29rsjl39i8en10jd00d3ensj89.apps.googleusercontent.com';
-const GOOGLE_ANDROID_CLIENT_ID = 'YOUR_GOOGLE_ANDROID_CLIENT_ID';
+const GOOGLE_ANDROID_CLIENT_ID = '847237699912-e4n80sa8hoc0fp6o3rfhfsosu6pvq7iv.apps.googleusercontent.com';
 
 const kakaoDiscovery = {
   authorizationEndpoint: 'https://kauth.kakao.com/oauth/authorize',

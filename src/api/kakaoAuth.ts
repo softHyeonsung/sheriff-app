@@ -1,10 +1,11 @@
 // src/api/kakaoAuth.ts
-// Kakao OAuth — client-side token exchange (no Cloud Function needed)
-// Uses REST API 키 (different from JavaScript 키 used for the map)
+// Kakao OAuth — authorization code → Kakao access token → Firebase Custom Token
+// → signInWithCustomToken (gives real Firebase Auth session for Firestore rules)
 
 import * as SecureStore from 'expo-secure-store';
-import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getAuth, signInWithCustomToken } from 'firebase/auth';
+import { app } from '../firebaseConfig';
 
 const KAKAO_SESSION_KEY = 'kakao_session';
 
@@ -20,7 +21,7 @@ export interface KakaoUser {
   accessToken: string;
 }
 
-// Step 1: Exchange authorization code → access token
+// Step 1: Exchange authorization code → Kakao access token
 export const exchangeKakaoCode = async (
   code: string,
   redirectUri: string,
@@ -64,41 +65,20 @@ export const getKakaoUserInfo = async (accessToken: string): Promise<KakaoUser> 
   };
 };
 
-// Step 3: Save Kakao user to Firestore (using Kakao ID as document key)
-// New users get a full document with createdAt.
-// Existing users only update mutable fields — createdAt is never overwritten.
-export const saveKakaoUserToFirestore = async (kakaoUser: KakaoUser): Promise<void> => {
-  const userRef = doc(db, 'users', `kakao_${kakaoUser.id}`);
-  const snap    = await getDoc(userRef);
-
-  if (snap.exists()) {
-    await setDoc(
-      userRef,
-      { nickname: kakaoUser.nickname, email: kakaoUser.email ?? '', profile_img: kakaoUser.profileImage },
-      { merge: true },
-    );
-  } else {
-    await setDoc(userRef, {
-      uid:              `kakao_${kakaoUser.id}`,
-      nickname:         kakaoUser.nickname,
-      email:            kakaoUser.email ?? '',
-      provider:         'kakao',
-      profile_img:      kakaoUser.profileImage,
-      points:           0,
-      sheriff_score:    0,
-      badge_list:       [],
-      saved_places:     [],
-      followers:        [],
-      following:        [],
-      rank_level:       'rookie',
-      is_home_verified: false,
-      createdAt:        serverTimestamp(),
-    });
-  }
+// Step 3: Send Kakao access token to Cloud Function → get Firebase Custom Token
+// → signInWithCustomToken so Firestore rules see a real request.auth.uid
+const getFirebaseCustomToken = async (accessToken: string): Promise<void> => {
+  const functions = getFunctions(app, 'asia-northeast3');
+  const kakaoCustomToken = httpsCallable<{ accessToken: string }, { customToken: string }>(
+    functions,
+    'kakaoCustomToken',
+  );
+  const result = await kakaoCustomToken({ accessToken });
+  const auth = getAuth(app);
+  await signInWithCustomToken(auth, result.data.customToken);
 };
 
-// Session persistence helpers — uses SecureStore (OS keychain/keystore, encrypted)
-// instead of AsyncStorage so the access token isn't readable on rooted devices.
+// Session persistence — OS keychain/keystore via SecureStore (not AsyncStorage)
 export const persistKakaoSession = async (user: KakaoUser): Promise<void> => {
   await SecureStore.setItemAsync(KAKAO_SESSION_KEY, JSON.stringify(user));
 };
@@ -116,14 +96,15 @@ export const clearKakaoSession = async (): Promise<void> => {
   await SecureStore.deleteItemAsync(KAKAO_SESSION_KEY);
 };
 
-// Convenience: exchange code → get user info → save to Firestore → persist session
+// Convenience: code → Kakao user → Firebase Auth → persist session
 export const loginWithKakao = async (
   code: string,
   redirectUri: string,
 ): Promise<KakaoUser> => {
   const accessToken = await exchangeKakaoCode(code, redirectUri);
   const kakaoUser   = await getKakaoUserInfo(accessToken);
-  await saveKakaoUserToFirestore(kakaoUser);
+  // Cloud Function이 Firestore upsert + Custom Token 발급을 모두 처리함
+  await getFirebaseCustomToken(accessToken);
   await persistKakaoSession(kakaoUser);
   return kakaoUser;
 };

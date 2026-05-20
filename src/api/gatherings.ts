@@ -256,7 +256,7 @@ export async function openChatRoom(gatheringId: string): Promise<void> {
   const gSnap = await getDoc(gRef);
   const gData = gSnap.exists() ? gSnap.data() : null;
   const memberUids: string[] = gData
-    ? [gData.host_id, ...(gData.participants as GatheringParticipant[]).map((p) => p.uid)]
+    ? Array.from(new Set([gData.host_id, ...(gData.participants as GatheringParticipant[]).map((p) => p.uid)]))
     : [];
   await updateDoc(gRef, { has_chat_room: true });
   await setDoc(

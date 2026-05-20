@@ -1,15 +1,70 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 admin.initializeApp();
 const db = admin.firestore();
 
+// ── 카카오 Custom Token 발급 ────────────────────────────────────────────────────
+// 클라이언트에서 Kakao access_token을 보내면 카카오 API로 검증 후 Firebase
+// Custom Token을 반환한다. 클라이언트는 이 토큰으로 signInWithCustomToken() 호출.
+
+export const kakaoCustomToken = onCall(
+  { region: 'asia-northeast3' },
+  async (request) => {
+    const accessToken: string = request.data?.accessToken;
+    if (!accessToken) throw new HttpsError('invalid-argument', 'accessToken required');
+
+    // 1. 카카오 사용자 정보 조회
+    const kakaoRes = await fetch('https://kapi.kakao.com/v2/user/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!kakaoRes.ok) throw new HttpsError('unauthenticated', 'Kakao token invalid');
+    const kakaoData = await kakaoRes.json() as { id?: number; kakao_account?: Record<string, unknown> };
+    if (!kakaoData.id) throw new HttpsError('unauthenticated', 'Cannot get Kakao user id');
+
+    const uid = `kakao_${kakaoData.id}`;
+    const account = kakaoData.kakao_account as Record<string, Record<string, string>> | undefined;
+    const nickname = account?.profile?.nickname ?? '카카오 사용자';
+    const email    = account?.email ?? '';
+    const profileImg = account?.profile?.profile_image_url ?? '';
+
+    // 2. Firestore 사용자 문서 upsert
+    const userRef = db.collection('users').doc(uid);
+    const snap = await userRef.get();
+    if (!snap.exists) {
+      await userRef.set({
+        uid,
+        nickname,
+        email,
+        provider: 'kakao',
+        profile_img: profileImg,
+        points: 0,
+        sheriff_score: 0,
+        badge_list: [],
+        saved_places: [],
+        followers: [],
+        following: [],
+        rank_level: 'rookie',
+        is_home_verified: false,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      await userRef.update({ nickname, email, profile_img: profileImg });
+    }
+
+    // 3. Firebase Custom Token 발급
+    const customToken = await admin.auth().createCustomToken(uid);
+    return { customToken };
+  }
+);
+
 // ── 매월 1일 00:00 KST — 지역별 상위 10명 보안관 뱃지 자동 부여 ──────────────
 // KST(UTC+9) 00:00 = UTC 전날 15:00 → cron: '0 15 L * *' 이 정확하지 않으므로
 // timeZone 옵션을 쓰면 Firebase가 변환해줍니다.
 
-export const monthlySherliffBadge = onSchedule(
+export const monthlySheriffBadge = onSchedule(
   {
     schedule: '0 0 1 * *',   // 매월 1일 00:00
     timeZone: 'Asia/Seoul',
@@ -65,7 +120,7 @@ export const monthlySherliffBadge = onSchedule(
     }
 
     await batch.commit();
-    functions.logger.info(`[monthlySherliffBadge] ${badgeId}: ${totalAwarded}명 부여 완료`);
+    functions.logger.info(`[monthlySheriffBadge] ${badgeId}: ${totalAwarded}명 부여 완료`);
   }
 );
 
