@@ -1,4 +1,4 @@
-// src/components/ShieldIcon.tsx
+﻿// src/components/ShieldIcon.tsx
 // ShieldStar — app identity mark. Used in login screen hero and badge displays.
 // Spec from DESIGN.md § Icons — star polygon inscribed in shield silhouette, amber fill, leather outline.
 
@@ -22,7 +22,7 @@ export default function ShieldIcon({ size = 64 }: ShieldIconProps) {
       <Path
         d="M20 1 L38 7 L38 22 C38 32 20 45 20 45 C20 45 2 32 2 22 L2 7 Z"
         fill="url(#shieldGrad)"
-        stroke="#A36E1D"
+        stroke="#1A1108"
         strokeWidth="1.5"
         strokeLinejoin="round"
       />
@@ -30,7 +30,7 @@ export default function ShieldIcon({ size = 64 }: ShieldIconProps) {
       <Path
         d="M20 10 L22.4 17.6 L30.5 17.6 L24.1 22.4 L26.5 30 L20 25.2 L13.5 30 L15.9 22.4 L9.5 17.6 L17.6 17.6 Z"
         fill="#FFFDF7"
-        stroke="#A36E1D"
+        stroke="#1A1108"
         strokeWidth="0.6"
         strokeLinejoin="round"
       />

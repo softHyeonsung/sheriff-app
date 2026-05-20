@@ -1,4 +1,4 @@
-// 경로: app/signup.tsx
+﻿// 경로: app/signup.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
@@ -83,7 +83,7 @@ export default function SignupScreen() {
           accessibilityLabel="뒤로 가기"
           accessibilityRole="button"
         >
-          <Ionicons name="chevron-back" size={24} color="#A36E1D" />
+          <Ionicons name="chevron-back" size={24} color="#1A1108" />
         </TouchableOpacity>
 
         {/* Hero */}
@@ -97,7 +97,7 @@ export default function SignupScreen() {
           <TextInput
             style={styles.input}
             placeholder="동네에서 불릴 이름"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={nickname}
             onChangeText={setNickname}
             returnKeyType="next"
@@ -111,7 +111,7 @@ export default function SignupScreen() {
             ref={emailRef}
             style={styles.input}
             placeholder="example@email.com"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -126,7 +126,7 @@ export default function SignupScreen() {
             ref={passwordRef}
             style={styles.input}
             placeholder="6자리 이상"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -143,7 +143,7 @@ export default function SignupScreen() {
               confirm.length > 0 && confirm !== password && styles.inputError,
             ]}
             placeholder="비밀번호 재입력"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={confirm}
             onChangeText={setConfirm}
             secureTextEntry
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#7A5C38',
+    color: '#1A1108',
     marginBottom: 6,
     marginTop: 4,
   },
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#A36E1D',
+    shadowColor: '#1A1108',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
   footerLink: {
     fontSize: 14,

@@ -1,5 +1,6 @@
 ﻿// 경로: app/create-gathering.tsx
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -14,6 +15,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createGathering } from '../src/api/gatherings';
+import { useAuthStore } from '../src/store/authStore';
 
 const MAX_DESC_CHARS  = 300;
 const MAX_TITLE_CHARS = 40;
@@ -40,21 +43,21 @@ function parseHashtags(text: string): string[] {
   return [...new Set(matches)];
 }
 
-interface SelectedPlace { name: string; address: string; }
-
 export default function CreateGatheringScreen() {
-  const insets    = useSafeAreaInsets();
-  const router    = useRouter();
+  const insets       = useSafeAreaInsets();
+  const router       = useRouter();
+  const firebaseUser = useAuthStore((s) => s.user);
+  const kakaoUser    = useAuthStore((s) => s.kakaoUser);
 
-  const [meetingType,  setMeetingType]  = useState<'regular' | 'flash'>('regular');
-  const [deadline,     setDeadline]     = useState('');
-  const [category,     setCategory]     = useState('');
-  const [title,        setTitle]        = useState('');
-  const [description,  setDescription]  = useState('');
-  const [place,        setPlace]        = useState<SelectedPlace | null>(null);
-  const [meetingAt,    setMeetingAt]    = useState('');
-  const [maxMembers,   setMaxMembers]   = useState(4);
-  const [submitting,   setSubmitting]   = useState(false);
+  const [meetingType,   setMeetingType]   = useState<'regular' | 'flash'>('regular');
+  const [deadline,      setDeadline]      = useState('');
+  const [category,      setCategory]      = useState('');
+  const [title,         setTitle]         = useState('');
+  const [description,   setDescription]   = useState('');
+  const [locationName,  setLocationName]  = useState('');
+  const [meetingAt,     setMeetingAt]     = useState('');
+  const [maxMembers,    setMaxMembers]    = useState(4);
+  const [submitting,    setSubmitting]    = useState(false);
 
   const hashtags = parseHashtags(description);
 
@@ -62,17 +65,41 @@ export default function CreateGatheringScreen() {
     setMaxMembers((n) => Math.min(20, Math.max(2, n + delta)));
 
   const handleSubmit = async () => {
-    if (!category)          { Alert.alert('카테고리를 선택해주세요');          return; }
-    if (!title.trim())       { Alert.alert('제목을 입력해주세요');              return; }
-    if (!description.trim()) { Alert.alert('모임 소개를 입력해주세요');         return; }
-    if (!meetingAt)          { Alert.alert('모임 날짜와 시간을 선택해주세요');   return; }
-    if (meetingType === 'flash' && !deadline) {
-      Alert.alert('마감 시간을 선택해주세요');
-      return;
-    }
+    if (!category)            { Alert.alert('카테고리를 선택해주세요');        return; }
+    if (!title.trim())         { Alert.alert('제목을 입력해주세요');            return; }
+    if (!description.trim())   { Alert.alert('모임 소개를 입력해주세요');       return; }
+    if (!meetingAt.trim())     { Alert.alert('모임 날짜와 시간을 입력해주세요'); return; }
+    if (meetingType === 'flash' && !deadline) { Alert.alert('마감 시간을 선택해주세요'); return; }
+
+    const uid = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
+    if (!uid) { Alert.alert('로그인이 필요해요'); return; }
+    const nickname = kakaoUser?.nickname ?? firebaseUser?.displayName ?? '익명';
+
     setSubmitting(true);
     try {
-      // TODO: Firestore write
+      let lat = 37.5665, lng = 126.9780;
+      const { status } = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: 'denied' as const }));
+      if (status === 'granted') {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null);
+        if (pos) { lat = pos.coords.latitude; lng = pos.coords.longitude; }
+      }
+
+      await createGathering({
+        hostId: uid,
+        hostNickname: nickname,
+        hostIsSheriff: false,
+        type: meetingType,
+        deadlineLabel: deadline || undefined,
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        locationName: locationName.trim() || '장소 미정',
+        locationLat: lat,
+        locationLng: lng,
+        tags: parseHashtags(description),
+        maxMembers,
+        meetingAt: meetingAt.trim(),
+      });
       Alert.alert('모임이 만들어졌어요!', '', [{ text: '확인', onPress: () => router.back() }]);
     } catch {
       Alert.alert('오류가 발생했어요', '다시 시도해주세요');
@@ -118,7 +145,7 @@ export default function CreateGatheringScreen() {
             <Ionicons
               name="calendar-outline"
               size={15}
-              color={meetingType === 'regular' ? '#1A1108' : '#7A5C38'}
+              color={meetingType === 'regular' ? '#1A1108' : '#1A1108'}
             />
             <Text style={[styles.typeChipText, meetingType === 'regular' && styles.typeChipTextActive]}>
               정기 모임
@@ -132,7 +159,7 @@ export default function CreateGatheringScreen() {
             <Ionicons
               name="flash"
               size={15}
-              color={meetingType === 'flash' ? '#1A1108' : '#7A5C38'}
+              color={meetingType === 'flash' ? '#1A1108' : '#1A1108'}
             />
             <Text style={[styles.typeChipText, meetingType === 'flash' && styles.typeChipTextActive]}>
               번개 모임
@@ -153,7 +180,7 @@ export default function CreateGatheringScreen() {
                     style={[styles.deadlineChip, active && styles.deadlineChipActive]}
                     onPress={() => setDeadline(opt.label)}
                   >
-                    <Ionicons name="flash" size={13} color={active ? '#1A1108' : '#A36E1D'} />
+                    <Ionicons name="flash" size={13} color={active ? '#1A1108' : '#1A1108'} />
                     <Text style={[styles.deadlineChipText, active && styles.deadlineChipTextActive]}>
                       {opt.label}
                     </Text>
@@ -162,7 +189,7 @@ export default function CreateGatheringScreen() {
               })}
             </View>
             <View style={styles.flashNote}>
-              <Ionicons name="information-circle-outline" size={15} color="#A36E1D" />
+              <Ionicons name="information-circle-outline" size={15} color="#1A1108" />
               <Text style={styles.flashNoteText}>
                 마감 시간이 지나면 모임이 자동으로 삭제돼요
               </Text>
@@ -187,7 +214,7 @@ export default function CreateGatheringScreen() {
                 onPress={() => setCategory(c.label)}
                 accessibilityLabel={c.label}
               >
-                <Ionicons name={c.icon} size={15} color={active ? '#1A1108' : '#A36E1D'} />
+                <Ionicons name={c.icon} size={15} color={active ? '#1A1108' : '#1A1108'} />
                 <Text style={[styles.catChipText, active && styles.catChipTextActive]}>{c.label}</Text>
               </TouchableOpacity>
             );
@@ -200,7 +227,7 @@ export default function CreateGatheringScreen() {
           <TextInput
             style={styles.titleInput}
             placeholder="모임 제목을 입력해주세요"
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={title}
             onChangeText={(t) => t.length <= MAX_TITLE_CHARS && setTitle(t)}
             returnKeyType="next"
@@ -217,7 +244,7 @@ export default function CreateGatheringScreen() {
           <TextInput
             style={styles.descInput}
             placeholder={`모임을 소개해주세요.\n#해시태그를 입력하면 자동으로 추가돼요`}
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={description}
             onChangeText={(t) => t.length <= MAX_DESC_CHARS && setDescription(t)}
             multiline
@@ -242,54 +269,43 @@ export default function CreateGatheringScreen() {
 
         {/* ── 장소 ── */}
         <Text style={styles.fieldLabel}>장소</Text>
-        <TouchableOpacity
-          style={styles.rowCard}
-          onPress={() => Alert.alert('장소 검색', '장소 검색 기능은 곧 추가될 예정이에요')}
-          activeOpacity={0.8}
-        >
+        <View style={styles.rowCard}>
           <Ionicons name="location-outline" size={20} color="#FFAC30" />
-          <View style={styles.rowCardInfo}>
-            {place ? (
-              <>
-                <Text style={styles.rowCardTitle}>{place.name}</Text>
-                <Text style={styles.rowCardSub}>{place.address}</Text>
-              </>
-            ) : (
-              <Text style={styles.rowCardPlaceholder}>장소 태그하기</Text>
-            )}
-          </View>
-          {place ? (
-            <TouchableOpacity onPress={() => setPlace(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle-outline" size={18} color="#B89060" />
+          <TextInput
+            style={[styles.rowCardTitle, { flex: 1 }]}
+            placeholder="장소 이름 입력 (예: 한강공원 여의도)"
+            placeholderTextColor="#9A9A9A"
+            value={locationName}
+            onChangeText={setLocationName}
+            returnKeyType="next"
+            accessibilityLabel="장소 이름"
+          />
+          {locationName ? (
+            <TouchableOpacity onPress={() => setLocationName('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle-outline" size={18} color="#1A1108" />
             </TouchableOpacity>
-          ) : (
-            <Ionicons name="chevron-forward" size={16} color="#B89060" />
-          )}
-        </TouchableOpacity>
+          ) : null}
+        </View>
 
         {/* ── 날짜·시간 ── */}
         <Text style={styles.fieldLabel}>날짜 및 시간</Text>
-        <TouchableOpacity
-          style={styles.rowCard}
-          onPress={() => Alert.alert('날짜 선택', '날짜 선택 기능은 곧 추가될 예정이에요')}
-          activeOpacity={0.8}
-        >
+        <View style={styles.rowCard}>
           <Ionicons name="calendar-outline" size={20} color="#FFAC30" />
-          <View style={styles.rowCardInfo}>
-            {meetingAt ? (
-              <Text style={styles.rowCardTitle}>{meetingAt}</Text>
-            ) : (
-              <Text style={styles.rowCardPlaceholder}>날짜와 시간을 선택해주세요</Text>
-            )}
-          </View>
+          <TextInput
+            style={[styles.rowCardTitle, { flex: 1 }]}
+            placeholder="예: 5월 25일 오후 3시"
+            placeholderTextColor="#9A9A9A"
+            value={meetingAt}
+            onChangeText={setMeetingAt}
+            returnKeyType="done"
+            accessibilityLabel="모임 날짜 및 시간"
+          />
           {meetingAt ? (
             <TouchableOpacity onPress={() => setMeetingAt('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle-outline" size={18} color="#B89060" />
+              <Ionicons name="close-circle-outline" size={18} color="#1A1108" />
             </TouchableOpacity>
-          ) : (
-            <Ionicons name="chevron-forward" size={16} color="#B89060" />
-          )}
-        </TouchableOpacity>
+          ) : null}
+        </View>
 
         {/* ── 최대 인원 ── */}
         <Text style={styles.fieldLabel}>최대 인원</Text>
@@ -319,7 +335,7 @@ export default function CreateGatheringScreen() {
 
         {/* ── Tips ── */}
         <View style={styles.tipsBox}>
-          <Ionicons name="information-circle-outline" size={16} color="#A36E1D" />
+          <Ionicons name="information-circle-outline" size={16} color="#1A1108" />
           <Text style={styles.tipsText}>
             모임을 생성하면 보안관 점수 +15점이 적립돼요
           </Text>
@@ -399,7 +415,7 @@ const styles = StyleSheet.create({
   typeChipText: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
+    color: '#1A1108',
   },
   typeChipTextActive: {
     fontFamily: 'AppleSDGothicNeo-Bold',
@@ -430,7 +446,7 @@ const styles = StyleSheet.create({
   deadlineChipText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
+    color: '#1A1108',
   },
   deadlineChipTextActive: {
     color: '#1A1108',
@@ -453,7 +469,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#A36E1D',
+    color: '#1A1108',
     lineHeight: 18,
   },
 
@@ -475,7 +491,7 @@ const styles = StyleSheet.create({
   catChipText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
+    color: '#1A1108',
   },
   catChipTextActive: { color: '#1A1108', fontFamily: 'AppleSDGothicNeo-Bold' },
 
@@ -502,7 +518,7 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
     textAlign: 'right',
     marginTop: 8,
   },
@@ -521,7 +537,7 @@ const styles = StyleSheet.create({
   hashtagText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
+    color: '#1A1108',
   },
 
   // ── Row cards ──
@@ -544,13 +560,13 @@ const styles = StyleSheet.create({
   rowCardSub: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
     marginTop: 2,
   },
   rowCardPlaceholder: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
 
   // ── Member counter ──
@@ -595,7 +611,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#A36E1D',
+    color: '#1A1108',
     lineHeight: 20,
   },
 });

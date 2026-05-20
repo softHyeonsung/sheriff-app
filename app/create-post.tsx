@@ -16,6 +16,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { createPost } from '../src/api/posts';
+import { useAuthStore } from '../src/store/authStore';
 
 const MAX_IMAGES = 5;
 const MAX_CHARS  = 500;
@@ -35,11 +37,12 @@ function parseHashtags(text: string): string[] {
 export default function CreatePostScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const firebaseUser = useAuthStore((s) => s.user);
+  const kakaoUser    = useAuthStore((s) => s.kakaoUser);
 
   const [images,  setImages]  = useState<string[]>([]);
   const [content, setContent] = useState('');
   const [place,   setPlace]   = useState<SelectedPlace | null>(null);
-  const [type,    setType]    = useState<'feed' | 'story'>('feed');
   const [posting, setPosting] = useState(false);
 
   const hashtags = parseHashtags(content);
@@ -72,9 +75,24 @@ export default function CreatePostScreen() {
       Alert.alert('내용을 입력해주세요');
       return;
     }
+    const authorId = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
+    if (!authorId) {
+      Alert.alert('로그인이 필요해요');
+      return;
+    }
+    const authorNickname = kakaoUser?.nickname ?? firebaseUser?.displayName ?? '익명';
     setPosting(true);
     try {
-      // TODO: Firebase Storage upload + Firestore write
+      await createPost({
+        authorId,
+        authorNickname,
+        authorIsSheriff: false,
+        type: 'feed',
+        content,
+        localImageUris: images,
+        locationName: place?.name ?? '',
+        tags: parseHashtags(content),
+      });
       Alert.alert('게시물이 작성됐어요!', '', [{ text: '확인', onPress: () => router.back() }]);
     } catch {
       Alert.alert('게시 실패', '다시 시도해주세요');
@@ -110,26 +128,6 @@ export default function CreatePostScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* ── 피드 / 스토리 type toggle ── */}
-        <View style={styles.typeRow}>
-          {(['feed', 'story'] as const).map((t) => (
-            <TouchableOpacity
-              key={t}
-              style={[styles.typeChip, type === t && styles.typeChipActive]}
-              onPress={() => setType(t)}
-            >
-              <Ionicons
-                name={t === 'feed' ? 'newspaper-outline' : 'time-outline'}
-                size={14}
-                color={type === t ? '#1A1108' : '#7A5C38'}
-              />
-              <Text style={[styles.typeChipText, type === t && styles.typeChipTextActive]}>
-                {t === 'feed' ? '피드' : '스토리 (24h)'}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* ── Image strip ── */}
         <ScrollView
           horizontal
@@ -139,7 +137,7 @@ export default function CreatePostScreen() {
         >
           {/* Add button */}
           <TouchableOpacity style={styles.addImageBtn} onPress={pickImages}>
-            <Ionicons name="camera-outline" size={28} color="#B89060" />
+            <Ionicons name="camera-outline" size={28} color="#1A1108" />
             <Text style={styles.addImageCount}>{images.length}/{MAX_IMAGES}</Text>
           </TouchableOpacity>
 
@@ -163,7 +161,7 @@ export default function CreatePostScreen() {
           <TextInput
             style={styles.contentInput}
             placeholder={`동네 소식을 공유해보세요.\n#해시태그를 입력하면 자동으로 추가돼요`}
-            placeholderTextColor="#B89060"
+            placeholderTextColor="#1A1108"
             value={content}
             onChangeText={(t) => t.length <= MAX_CHARS && setContent(t)}
             multiline
@@ -205,16 +203,16 @@ export default function CreatePostScreen() {
           </View>
           {place ? (
             <TouchableOpacity onPress={() => setPlace(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle-outline" size={18} color="#B89060" />
+              <Ionicons name="close-circle-outline" size={18} color="#1A1108" />
             </TouchableOpacity>
           ) : (
-            <Ionicons name="chevron-forward" size={16} color="#B89060" />
+            <Ionicons name="chevron-forward" size={16} color="#1A1108" />
           )}
         </TouchableOpacity>
 
         {/* ── Tips ── */}
         <View style={styles.tipsBox}>
-          <Ionicons name="information-circle-outline" size={16} color="#A36E1D" />
+          <Ionicons name="information-circle-outline" size={16} color="#1A1108" />
           <Text style={styles.tipsText}>
             게시물을 작성하면 보안관 점수 +10점이 적립돼요
           </Text>
@@ -259,36 +257,6 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   content: { padding: 16, gap: 14 },
 
-  // Type toggle
-  typeRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  typeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4D4D4',
-  },
-  typeChipActive: {
-    backgroundColor: '#FFAC30',
-    borderColor: '#FFAC30',
-  },
-  typeChipText: {
-    fontSize: 13,
-    fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#7A5C38',
-  },
-  typeChipTextActive: {
-    fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#1A1108',
-  },
-
   // Image strip
   imageStrip: { marginHorizontal: -16 },
   imageStripContent: {
@@ -311,7 +279,7 @@ const styles = StyleSheet.create({
   addImageCount: {
     fontSize: 11,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
   imageTile: {
     width: 80,
@@ -362,7 +330,7 @@ const styles = StyleSheet.create({
   charCount: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
     textAlign: 'right',
     marginTop: 8,
   },
@@ -385,7 +353,7 @@ const styles = StyleSheet.create({
   hashtagText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#A36E1D',
+    color: '#1A1108',
   },
 
   // Place
@@ -408,13 +376,13 @@ const styles = StyleSheet.create({
   placeAddr: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#7A5C38',
+    color: '#1A1108',
     marginTop: 2,
   },
   placePlaceholder: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#B89060',
+    color: '#1A1108',
   },
 
   // Tips
@@ -432,7 +400,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#A36E1D',
+    color: '#1A1108',
     lineHeight: 20,
   },
 });

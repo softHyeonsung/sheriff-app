@@ -7,7 +7,7 @@ import { create } from 'zustand';
 
 export interface MapPin {
   id: string;
-  type: 'gathering' | 'quest' | 'saved';
+  type: 'gathering' | 'saved';
   lat: number;
   lng: number;
   title: string;

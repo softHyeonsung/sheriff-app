@@ -9,6 +9,9 @@ export interface PendingRequest {
 export interface ApprovedMember {
   uid: string;
   nickname: string;
+  isSheriff?: boolean;
+  joinedAt?: string;
+  avatarSeed?: string;
 }
 
 export interface GatheringEntry {
@@ -37,24 +40,31 @@ export const useGatheringStore = create<GatheringStore>((set) => ({
     g0: {
       id: 'g0',
       type: 'flash',
-      deadlineMs: Date.now() + 90 * 60 * 1000, // 90 minutes from now
+      deadlineMs: Date.now() + 90 * 60 * 1000,
       participantCount: 2,
       maxMembers: 5,
       pendingRequests: [],
-      approvedMembers: [],
+      approvedMembers: [
+        { uid: 'user_x', nickname: '번개대장', isSheriff: false, joinedAt: '방금 전', avatarSeed: 'flash1' },
+        { uid: 'user_y', nickname: '한강러버', isSheriff: true, joinedAt: '2분 전', avatarSeed: 'flash2' },
+      ],
       rejections: {},
       hasChatRoom: false,
     },
     g1: {
       id: 'g1',
       type: 'regular',
-      participantCount: 1,
+      participantCount: 3,
       maxMembers: 8,
       pendingRequests: [
         { uid: 'user_a', nickname: '동네산책러', requestedAt: '10분 전' },
         { uid: 'user_b', nickname: '한강뷰러버', requestedAt: '5분 전' },
       ],
-      approvedMembers: [],
+      approvedMembers: [
+        { uid: 'user_c', nickname: '주말런너', isSheriff: true, joinedAt: '30분 전', avatarSeed: 'runner1' },
+        { uid: 'user_d', nickname: '산책왕', isSheriff: false, joinedAt: '1시간 전', avatarSeed: 'walker1' },
+        { uid: 'user_e', nickname: '남산단골', isSheriff: false, joinedAt: '2시간 전', avatarSeed: 'namsan1' },
+      ],
       rejections: {},
       hasChatRoom: false,
     },
@@ -64,7 +74,10 @@ export const useGatheringStore = create<GatheringStore>((set) => ({
       participantCount: 2,
       maxMembers: 4,
       pendingRequests: [],
-      approvedMembers: [],
+      approvedMembers: [
+        { uid: 'user_f', nickname: '맛집헌터', isSheriff: false, joinedAt: '3시간 전', avatarSeed: 'food1' },
+        { uid: 'user_g', nickname: '야식러버', isSheriff: true, joinedAt: '3시간 전', avatarSeed: 'food2' },
+      ],
       rejections: {},
       hasChatRoom: false,
     },
@@ -74,7 +87,11 @@ export const useGatheringStore = create<GatheringStore>((set) => ({
       participantCount: 3,
       maxMembers: 3,
       pendingRequests: [],
-      approvedMembers: [],
+      approvedMembers: [
+        { uid: 'user_h', nickname: '문화인', isSheriff: false, joinedAt: '5시간 전', avatarSeed: 'culture1' },
+        { uid: 'user_i', nickname: '박물관매니아', isSheriff: true, joinedAt: '5시간 전', avatarSeed: 'culture2' },
+        { uid: 'user_j', nickname: '역사탐방러', isSheriff: false, joinedAt: '4시간 전', avatarSeed: 'culture3' },
+      ],
       rejections: {},
       hasChatRoom: false,
     },
