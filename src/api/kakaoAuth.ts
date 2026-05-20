@@ -5,7 +5,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getAuth, signInWithCustomToken } from 'firebase/auth';
-import { app } from '../firebaseConfig';
 
 const KAKAO_SESSION_KEY = 'kakao_session';
 
@@ -68,13 +67,13 @@ export const getKakaoUserInfo = async (accessToken: string): Promise<KakaoUser> 
 // Step 3: Send Kakao access token to Cloud Function → get Firebase Custom Token
 // → signInWithCustomToken so Firestore rules see a real request.auth.uid
 const getFirebaseCustomToken = async (accessToken: string): Promise<void> => {
-  const functions = getFunctions(app, 'asia-northeast3');
+  const functions = getFunctions(undefined, 'asia-northeast3');
   const kakaoCustomToken = httpsCallable<{ accessToken: string }, { customToken: string }>(
     functions,
     'kakaoCustomToken',
   );
   const result = await kakaoCustomToken({ accessToken });
-  const auth = getAuth(app);
+  const auth = getAuth();
   await signInWithCustomToken(auth, result.data.customToken);
 };
 
