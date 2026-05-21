@@ -3,24 +3,27 @@ import { create } from 'zustand';
 import { KakaoUser } from '../api/kakaoAuth';
 
 interface AuthState {
-  user:           FirebaseUser | null; // Firebase Auth (email / Google / Apple)
-  kakaoUser:      KakaoUser   | null; // Kakao OAuth session
-  loading:        boolean;
-  setUser:        (user: FirebaseUser | null) => void;
-  setKakaoUser:   (user: KakaoUser   | null) => void;
-  setLoading:     (loading: boolean)          => void;
-  isLoggedIn:     () => boolean;
+  user:               FirebaseUser | null;
+  kakaoUser:          KakaoUser   | null;
+  loading:            boolean;
+  profileComplete:    boolean | null; // null = 아직 확인 안 됨
+  setUser:            (user: FirebaseUser | null) => void;
+  setKakaoUser:       (user: KakaoUser   | null) => void;
+  setLoading:         (loading: boolean)          => void;
+  setProfileComplete: (v: boolean)                => void;
+  isLoggedIn:         () => boolean;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  user:       null,
-  kakaoUser:  null,
-  loading:    true,
+  user:            null,
+  kakaoUser:       null,
+  loading:         true,
+  profileComplete: null,
 
-  setUser:      (user)      => set({ user,      loading: false }),
-  setKakaoUser: (kakaoUser) => set({ kakaoUser, loading: false }),
-  setLoading:   (loading)   => set({ loading }),
+  setUser:            (user)      => set({ user,      loading: false }),
+  setKakaoUser:       (kakaoUser) => set({ kakaoUser, loading: false }),
+  setLoading:         (loading)   => set({ loading }),
+  setProfileComplete: (v)         => set({ profileComplete: v }),
 
-  // True if either Firebase or Kakao session is active
   isLoggedIn: () => !!(get().user || get().kakaoUser),
 }));

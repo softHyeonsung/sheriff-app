@@ -38,6 +38,7 @@ const createUserDoc = async (uid: string, email: string, provider: AuthProvider,
       following: [],
       rank_level: 'rookie',
       is_home_verified: false,
+      profile_complete: false,
       createdAt: serverTimestamp(),
     });
   }

@@ -48,6 +48,7 @@ export const kakaoCustomToken = onCall(
         following: [],
         rank_level: 'rookie',
         is_home_verified: false,
+        profile_complete: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {

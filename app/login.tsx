@@ -50,7 +50,7 @@ export default function LoginScreen() {
     {
       clientId:    KAKAO_REST_API_KEY,
       redirectUri: kakaoRedirectUri,
-      scopes:      ['profile_nickname', 'profile_image', 'account_email'],
+      scopes:      ['profile_nickname', 'profile_image'],
     },
     kakaoDiscovery
   );

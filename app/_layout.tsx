@@ -1,24 +1,24 @@
-// 경로: app/_layout.tsx
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
-import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { getPersistedKakaoSession } from '../src/api/kakaoAuth';
-import { auth } from '../src/firebaseConfig';
+import { auth, db } from '../src/firebaseConfig';
 import { useAuthStore } from '../src/store/authStore';
 
 export default function RootLayout() {
   const segments = useSegments();
   const router   = useRouter();
-  const [isReady, setIsReady] = useState(false);
 
-  const setUser      = useAuthStore((state) => state.setUser);
-  const setKakaoUser = useAuthStore((state) => state.setKakaoUser);
-  const isLoggedIn   = useAuthStore((state) => state.isLoggedIn);
-  // Subscribe so the navigation guard re-runs when either auth source changes
-  const firebaseUser = useAuthStore((state) => state.user);
-  const kakaoUser    = useAuthStore((state) => state.kakaoUser);
+  const setUser           = useAuthStore((s) => s.setUser);
+  const setKakaoUser      = useAuthStore((s) => s.setKakaoUser);
+  const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
+  const isLoggedIn        = useAuthStore((s) => s.isLoggedIn);
+  const firebaseUser      = useAuthStore((s) => s.user);
+  const kakaoUser         = useAuthStore((s) => s.kakaoUser);
+  const profileComplete   = useAuthStore((s) => s.profileComplete);
 
   const [fontsLoaded] = useFonts({
     'AppleSDGothicNeo-Regular':  require('../assets/fonts/Apple_산돌고딕_Neo/AppleSDGothicNeoR.ttf'),
@@ -28,49 +28,62 @@ export default function RootLayout() {
     'AppleSDGothicNeo-Heavy':    require('../assets/fonts/Apple_산돌고딕_Neo/AppleSDGothicNeoH.ttf'),
   });
 
-  // Gate isReady on BOTH Firebase auth AND Kakao session restore.
-  // If Firebase fires before AsyncStorage resolves (common), the guard would
-  // wrongly kick a Kakao user to /login — so we wait for both before rendering.
+  // 1. Firebase + Kakao 세션 복원
   useEffect(() => {
-    let kakaoResolved   = false;
-    let firebaseResolved = false;
-
-    const trySetReady = () => {
-      if (kakaoResolved && firebaseResolved) setIsReady(true);
-    };
-
-    // 1. Restore persisted Kakao session
     getPersistedKakaoSession()
       .then((stored) => { if (stored) setKakaoUser(stored); })
-      .catch((e) => console.warn('[auth] Kakao session restore failed:', e))
-      .finally(() => { kakaoResolved = true; trySetReady(); });
+      .catch((e) => console.warn('[auth] Kakao session restore failed:', e));
 
-    // 2. Firebase auth state (email / Google / Apple)
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
-      firebaseResolved = true;
-      trySetReady();
     });
 
     return unsubscribe;
   }, []);
 
-  // Navigation guard — runs once both auth sources are resolved, and again
-  // whenever auth state changes (login, logout, token expiry).
+  // 2. 로그인 확정 시 profile_complete 조회
+  //    firebaseUser / kakaoUser 중 하나라도 바뀌면 재조회
+  useEffect(() => {
+    if (!isLoggedIn()) {
+      // 비로그인 상태 → profileComplete false로 확정 (가드가 login으로 보냄)
+      setProfileComplete(false);
+      return;
+    }
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+
+    getDoc(doc(db, 'users', uid))
+      .then((snap) => setProfileComplete(snap.data()?.profile_complete ?? false))
+      .catch(() => setProfileComplete(false));
+  }, [firebaseUser, kakaoUser]);
+
+  // profileComplete가 null이 아닌 시점 = auth + profile 체크 모두 완료
+  const isReady = profileComplete !== null && fontsLoaded;
+
+  // 3. 네비게이션 가드
   useEffect(() => {
     if (!isReady) return;
-    const inAuthGroup    = segments[0] === '(tabs)';
-    const inPublicScreen = segments[0] === 'login' || segments[0] === 'signup';
 
-    if (!isLoggedIn() && inAuthGroup) {
+    const seg            = segments[0] as string;
+    const inTabs         = seg === '(tabs)';
+    const inPublic       = seg === 'login' || seg === 'signup';
+    const inProfileSetup = seg === 'profile-setup';
+    const loggedIn       = isLoggedIn();
+
+    if (!loggedIn && inTabs) {
       router.replace('/login');
-    } else if (isLoggedIn() && inPublicScreen) {
+    } else if (loggedIn && inPublic) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace((profileComplete ? '/(tabs)' : '/profile-setup') as any);
+    } else if (loggedIn && !profileComplete && !inProfileSetup) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.replace('/profile-setup' as any);
+    } else if (loggedIn && profileComplete && inProfileSetup) {
       router.replace('/(tabs)');
     }
-  }, [isReady, firebaseUser, kakaoUser, segments]);
+  }, [isReady, firebaseUser, kakaoUser, profileComplete, segments]);
 
-  // 폰트 로딩 + 인증 상태 확인이 모두 완료될 때까지 스피너 표시
-  if (!isReady || !fontsLoaded) {
+  if (!isReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
         <ActivityIndicator size="large" color="#FFAC30" />
@@ -80,9 +93,10 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="signup" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="login"         options={{ headerShown: false }} />
+      <Stack.Screen name="signup"        options={{ headerShown: false }} />
+      <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)"        options={{ headerShown: false }} />
     </Stack>
   );
 }
