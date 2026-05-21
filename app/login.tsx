@@ -1,5 +1,8 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -12,23 +15,25 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { login } from '../src/api/auth';
+import { login, loginWithApple, loginWithGoogle } from '../src/api/auth';
 import { KAKAO_REST_API_KEY, loginWithKakao } from '../src/api/kakaoAuth';
+import GoogleIcon from '../src/components/GoogleIcon';
 import KakaoIcon from '../src/components/KakaoIcon';
 import ShieldIcon from '../src/components/ShieldIcon';
 import { useAuthStore } from '../src/store/authStore';
 
-// 카카오 OAuth → Firebase Hosting 중계 → sheriffapp:// 딥링크
-const KAKAO_REDIRECT_URI = 'https://sheriff-app-dab41.web.app/kakao';
+const KAKAO_REDIRECT_URI  = 'https://sheriff-app-dab41.web.app/kakao';
+const GOOGLE_REDIRECT_URI = 'https://sheriff-app-dab41.web.app/google';
+const GOOGLE_WEB_CLIENT_ID = '847237699912-bebdqk9u4eqf9188eu3bt9tppt3e1aqr.apps.googleusercontent.com';
 
 export default function LoginScreen() {
-  const router       = useRouter();
-  const setKakaoUser = useAuthStore((s) => s.setKakaoUser);
+  const router        = useRouter();
+  const setKakaoUser  = useAuthStore((s) => s.setKakaoUser);
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  // ── 이메일 로그인 ──────────────────────────────────────────────────────────
+  // ── 이메일 로그인 ────────────────────────────────────────────────────────────
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('오류', '이메일과 비밀번호를 입력해주세요.');
@@ -45,7 +50,7 @@ export default function LoginScreen() {
         code === 'auth/user-not-found' ||
         code === 'auth/wrong-password'
       ) {
-        Alert.alert('로그인 실패', '이메일 또는 비밀번호가 올바르지 않아요.');
+        Alert.alert('로그인 실패', '이메일 또는 비밀번호가 올바르지 않아요.\n계정이 없다면 회원가입을 먼저 해주세요.');
       } else if (code === 'auth/too-many-requests') {
         Alert.alert('로그인 실패', '잠시 후 다시 시도해주세요.');
       } else {
@@ -56,13 +61,12 @@ export default function LoginScreen() {
     }
   };
 
-  // ── 카카오 로그인 ──────────────────────────────────────────────────────────
+  // ── 카카오 로그인 ────────────────────────────────────────────────────────────
   const handleKakaoLogin = async () => {
     if (!KAKAO_REST_API_KEY || KAKAO_REST_API_KEY === 'YOUR_KAKAO_REST_API_KEY') {
       Alert.alert('설정 오류', '카카오 API 키가 설정되지 않았어요.');
       return;
     }
-
     const authUrl =
       'https://kauth.kakao.com/oauth/authorize?' +
       new URLSearchParams({
@@ -74,9 +78,7 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      // 시스템 브라우저로 카카오 로그인 → Firebase Hosting → sheriffapp://
       const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sheriffapp://');
-
       if (result.type !== 'success') return;
 
       const code = new URL(result.url).searchParams.get('code');
@@ -87,6 +89,70 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('카카오 로그인 실패', String(e?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── 구글 로그인 ──────────────────────────────────────────────────────────────
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      // nonce: Google implicit flow에서 id_token 요청 시 필수
+      const rawNonce    = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const hashedNonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
+
+      const authUrl =
+        'https://accounts.google.com/o/oauth2/v2/auth?' +
+        new URLSearchParams({
+          client_id:     GOOGLE_WEB_CLIENT_ID,
+          redirect_uri:  GOOGLE_REDIRECT_URI,
+          response_type: 'id_token',
+          scope:         'openid email profile',
+          nonce:         hashedNonce,
+        }).toString();
+
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, 'sheriffapp://');
+      if (result.type !== 'success') return;
+
+      const idToken = new URL(result.url).searchParams.get('id_token');
+      if (!idToken) throw new Error('Google ID 토큰을 받지 못했어요.');
+
+      await loginWithGoogle(idToken);
+      router.replace('/(tabs)');
+    } catch (e: any) {
+      Alert.alert('Google 로그인 실패', String(e?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── 애플 로그인 ──────────────────────────────────────────────────────────────
+  const handleAppleLogin = async () => {
+    setLoading(true);
+    try {
+      const randomBytes = await Crypto.getRandomBytesAsync(32);
+      const rawNonce    = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const nonce       = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce,
+      });
+      if (credential.identityToken) {
+        await loginWithApple(credential.identityToken, rawNonce);
+        router.replace('/(tabs)');
+      }
+    } catch (error: any) {
+      if (error.code !== 'ERR_REQUEST_CANCELED') {
+        Alert.alert('Apple 로그인 실패', String(error));
+      }
     } finally {
       setLoading(false);
     }
@@ -120,6 +186,7 @@ export default function LoginScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             returnKeyType="next"
+            accessibilityLabel="이메일 입력"
           />
           <TextInput
             style={styles.input}
@@ -130,6 +197,7 @@ export default function LoginScreen() {
             secureTextEntry
             returnKeyType="done"
             onSubmitEditing={handleLogin}
+            accessibilityLabel="비밀번호 입력"
           />
 
           <TouchableOpacity
@@ -140,10 +208,7 @@ export default function LoginScreen() {
             <Text style={styles.loginBtnText}>{loading ? '로그인 중...' : '로그인'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.signupBtn}
-            onPress={() => router.push('/signup')}
-          >
+          <TouchableOpacity style={styles.signupBtn} onPress={() => router.push('/signup')}>
             <Text style={styles.signupText}>
               계정이 없으신가요? <Text style={styles.signupLink}>회원가입</Text>
             </Text>
@@ -157,15 +222,42 @@ export default function LoginScreen() {
           <View style={styles.divider} />
         </View>
 
-        {/* 카카오 */}
-        <TouchableOpacity
-          style={[styles.kakaoBtn, loading && styles.disabledBtn]}
-          onPress={handleKakaoLogin}
-          disabled={loading}
-        >
-          <View style={styles.socialBtnIcon}><KakaoIcon size={22} /></View>
-          <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
-        </TouchableOpacity>
+        {/* 소셜 버튼 */}
+        <View style={styles.socialGroup}>
+          {/* 카카오 */}
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.kakaoBtn, loading && styles.disabledBtn]}
+            onPress={handleKakaoLogin}
+            disabled={loading}
+          >
+            <View style={styles.socialBtnIcon}><KakaoIcon size={22} /></View>
+            <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
+          </TouchableOpacity>
+
+          {/* 구글 */}
+          <TouchableOpacity
+            style={[styles.socialBtn, styles.googleBtn, loading && styles.disabledBtn]}
+            onPress={handleGoogleLogin}
+            disabled={loading}
+          >
+            <View style={styles.socialBtnIcon}><GoogleIcon size={22} /></View>
+            <Text style={styles.googleBtnText}>Google로 계속하기</Text>
+          </TouchableOpacity>
+
+          {/* 애플 (iOS 전용) */}
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={[styles.socialBtn, styles.appleBtn, loading && styles.disabledBtn]}
+              onPress={handleAppleLogin}
+              disabled={loading}
+            >
+              <View style={styles.socialBtnIcon}>
+                <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
+              </View>
+              <Text style={styles.appleBtnText}>Apple로 계속하기</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -235,11 +327,7 @@ const styles = StyleSheet.create({
     color: '#FFAC30',
     fontFamily: 'AppleSDGothicNeo-SemiBold',
   },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 24,
-  },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
   divider: { flex: 1, height: 1, backgroundColor: '#D4D4D4' },
   dividerText: {
     marginHorizontal: 12,
@@ -247,15 +335,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
   },
-  kakaoBtn: {
+  socialGroup: { gap: 10 },
+  socialBtn: {
     height: 52,
-    backgroundColor: '#FEE500',
     borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
   },
   socialBtnIcon: { width: 28, alignItems: 'flex-start', justifyContent: 'center' },
+  disabledBtn: { opacity: 0.5 },
+  kakaoBtn: { backgroundColor: '#FEE500' },
   kakaoBtnText: {
     flex: 1,
     textAlign: 'center',
@@ -264,5 +354,26 @@ const styles = StyleSheet.create({
     fontFamily: 'AppleSDGothicNeo-SemiBold',
     marginRight: 28,
   },
-  disabledBtn: { opacity: 0.5 },
+  googleBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+  },
+  googleBtnText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#1A1108',
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    marginRight: 28,
+  },
+  appleBtn: { backgroundColor: '#000000' },
+  appleBtnText: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    marginRight: 28,
+  },
 });
