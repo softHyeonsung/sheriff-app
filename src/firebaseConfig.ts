@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
+import { getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, persistentLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -18,12 +18,22 @@ const firebaseConfig = {
   measurementId: "G-1QLPRCEFZ5"
 };
 
-// Initialize Firebase
-export const app = initializeApp(firebaseConfig);
+// Initialize Firebase — 앱이 이미 초기화된 경우 재사용 (Fast Refresh 대응)
+export const app = getApps()[0] ?? initializeApp(firebaseConfig);
 
-// 외부에서 쓸 수 있도록 각각 export
-export const db = getFirestore(app);
-export const auth = getAuth(app)
+// Firestore — 이미 초기화된 경우 기존 인스턴스 반환
+let _db: ReturnType<typeof getFirestore>;
+try {
+  _db = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+    localCache: persistentLocalCache(),
+  });
+} catch {
+  _db = getFirestore(app);
+}
+export const db = _db;
+
+export const auth = getAuth(app);
 export const storage = getStorage(app);
 
 export default app;

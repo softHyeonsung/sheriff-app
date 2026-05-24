@@ -116,6 +116,9 @@ export default function ChatScreen() {
                 <View style={styles.roomInfo}>
                   <View style={styles.roomTopRow}>
                     <Text style={styles.roomTitle} numberOfLines={1}>{title}</Text>
+                    {(item.unread_counts?.[myUid] ?? 0) > 0 && (
+                      <View style={styles.unreadDot} />
+                    )}
                     <Text style={styles.roomTime}>{formatTime(item.last_message_at)}</Text>
                   </View>
                   <Text style={styles.lastMsg} numberOfLines={1}>
@@ -256,5 +259,13 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#F5F5F5',
     marginLeft: 84,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FFAC30',
+    marginRight: 6,
+    alignSelf: 'center',
   },
 });

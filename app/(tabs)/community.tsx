@@ -22,6 +22,7 @@ import {
   FirestoreGathering,
   approveJoin,
   cancelJoin,
+  deleteGathering,
   openChatRoom,
   rejectJoin,
   requestJoin as apiRequestJoin,
@@ -287,10 +288,12 @@ function GatheringCard({
   };
 
   const handleOpenChat = async () => {
-    if (!hasChatRoom) {
-      await openChatRoom(gathering.id).catch(() => {});
-      Alert.alert('채팅방이 만들어졌어요!', '승인된 멤버들에게 알림이 전송됩니다 ✓');
+    if (hasChatRoom) {
+      router.push({ pathname: '/dm/[roomId]', params: { roomId: gathering.id } });
+      return;
     }
+    await openChatRoom(gathering.id).catch(() => {});
+    Alert.alert('채팅방이 만들어졌어요!', '승인된 멤버들에게 알림이 전송됩니다 ✓');
   };
 
   type JoinVariant = 'default' | 'pending' | 'approved' | 'rejected' | 'full';
@@ -327,9 +330,35 @@ function GatheringCard({
             </View>
             <Text style={gcard.meta}>{formatTimeAgo(gathering.created_at)} · {gathering.category}</Text>
           </View>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#1A1108" />
-          </TouchableOpacity>
+          {isOwn && (
+            <TouchableOpacity
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() =>
+                Alert.alert('모임 관리', undefined, [
+                  {
+                    text: '삭제',
+                    style: 'destructive',
+                    onPress: () =>
+                      Alert.alert(
+                        '모임 삭제',
+                        `'${gathering.title}' 모임을 삭제할까요?${gathering.has_chat_room ? '\n채팅방 멤버들에게 알림이 전송됩니다.' : ''}`,
+                        [
+                          { text: '취소', style: 'cancel' },
+                          {
+                            text: '삭제',
+                            style: 'destructive',
+                            onPress: () => deleteGathering(gathering.id).catch(() => {}),
+                          },
+                        ]
+                      ),
+                  },
+                  { text: '취소', style: 'cancel' },
+                ])
+              }
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color="#1A1108" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Title */}
@@ -426,20 +455,19 @@ function GatheringCard({
         </View>
       </View>
 
-      {/* Host: chat button */}
-      {isOwn && (canCreateChat || hasChatRoom) && (
+      {/* Chat button: host can create/enter, approved members can enter */}
+      {((isOwn && (canCreateChat || hasChatRoom)) || (!isOwn && isApproved && hasChatRoom)) && (
         <TouchableOpacity
           style={[gcard.chatBtn, hasChatRoom && gcard.chatBtnActive]}
           onPress={handleOpenChat}
-          activeOpacity={hasChatRoom ? 1 : 0.8}
         >
           <Ionicons
             name={hasChatRoom ? 'chatbubbles' : 'chatbubbles-outline'}
             size={16}
-            color={hasChatRoom ? '#FFFFFF' : '#1A1108'}
+            color="#1A1108"
             style={{ marginRight: 6 }}
           />
-          <Text style={[gcard.chatBtnText, hasChatRoom && gcard.chatBtnTextActive]}>
+          <Text style={gcard.chatBtnText}>
             {hasChatRoom ? '채팅방 입장' : '채팅방 만들기'}
           </Text>
         </TouchableOpacity>
@@ -954,14 +982,14 @@ const modal = StyleSheet.create({
 // ── Category strip styles ─────────────────────────────────────────────────────
 
 const cat = StyleSheet.create({
-  strip: { flexShrink: 0, borderBottomWidth: 1, borderBottomColor: '#D4D4D4' },
-  stripContent: { paddingHorizontal: 12, paddingVertical: 10, gap: 8, alignItems: 'center' },
+  strip: { flexShrink: 0, flexGrow: 0, borderBottomWidth: 1, borderBottomColor: '#D4D4D4' },
+  stripContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 8, alignItems: 'center' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#D4D4D4',
@@ -1006,7 +1034,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 5,
     borderBottomWidth: 1,
     borderBottomColor: '#F5F5F5',
   },

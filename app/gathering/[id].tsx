@@ -8,7 +8,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +24,7 @@ import {
   cancelGathering,
   cancelJoin,
   completeGathering,
+  deleteGathering,
   openChatRoom,
   rejectJoin,
   requestJoin as apiRequestJoin,
@@ -105,6 +105,7 @@ export default function GatheringDetailScreen() {
   const [gathering, setGathering] = useState<FirestoreGathering | null | undefined>(undefined);
   const [myFollowing, setMyFollowing] = useState<string[]>([]);
   const [showShare, setShowShare] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [rejectingUid,  setRejectingUid]  = useState<string | null>(null);
   const [rejectReason,  setRejectReason]  = useState('');
   const [selectedMember, setSelectedMember] = useState<GatheringParticipant | null>(null);
@@ -229,6 +230,21 @@ export default function GatheringDetailScreen() {
     ]);
   };
 
+  const handleDeleteGathering = () => {
+    setShowMenu(false);
+    Alert.alert('모임 삭제', '이 모임을 삭제할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteGathering(gathering.id).catch(() => {});
+          router.back();
+        },
+      },
+    ]);
+  };
+
   type Variant = 'default' | 'pending' | 'approved' | 'rejected' | 'full';
   let variant: Variant = 'default';
   if (isFull && !isPending && !isApproved) variant = 'full';
@@ -265,6 +281,22 @@ export default function GatheringDetailScreen() {
         shareText={`[모임 공유] ${gathering?.title ?? ''}\n📍 ${gathering?.location.name ?? ''}\n🗓 ${gathering?.meeting_at ?? ''}\n\n보안관 앱에서 확인하세요!`}
       />
 
+      {/* 3-dot 삭제 메뉴 */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <Pressable style={menuStyles.backdrop} onPress={() => setShowMenu(false)}>
+          <View style={menuStyles.sheet}>
+            <TouchableOpacity style={menuStyles.item} onPress={handleDeleteGathering} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={20} color="#E05252" />
+              <Text style={menuStyles.itemDanger}>삭제하기</Text>
+            </TouchableOpacity>
+            <View style={menuStyles.sep} />
+            <TouchableOpacity style={menuStyles.item} onPress={() => setShowMenu(false)} activeOpacity={0.7}>
+              <Text style={menuStyles.itemCancel}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <TouchableOpacity
@@ -277,10 +309,10 @@ export default function GatheringDetailScreen() {
         <Text style={styles.headerTitle}>모임 상세</Text>
         <TouchableOpacity
           style={styles.headerIconBtn}
-          onPress={() => setShowShare(true)}
+          onPress={() => isOwn ? setShowMenu(true) : setShowShare(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="share-outline" size={24} color="#1A1108" />
+          <Ionicons name={isOwn ? 'ellipsis-vertical' : 'share-outline'} size={24} color="#1A1108" />
         </TouchableOpacity>
       </View>
 
@@ -311,10 +343,18 @@ export default function GatheringDetailScreen() {
         {/* Host row */}
         <View style={styles.section}>
           <View style={styles.hostRow}>
-            <View style={[styles.hostAvatar, gathering.host_is_sheriff && styles.hostAvatarSheriff]}>
-              <Ionicons name="person" size={22} color="#1A1108" />
-            </View>
-            <View style={styles.hostInfo}>
+            <TouchableOpacity
+              onPress={() => router.push({ pathname: '/user/[uid]', params: { uid: gathering.host_id } })}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <View style={[styles.hostAvatar, gathering.host_is_sheriff && styles.hostAvatarSheriff]}>
+                <Ionicons name="person" size={22} color="#1A1108" />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.hostInfo}
+              onPress={() => router.push({ pathname: '/user/[uid]', params: { uid: gathering.host_id } })}
+            >
               <View style={styles.nameRow}>
                 <Text style={styles.hostName}>{gathering.host_nickname}</Text>
                 {gathering.host_is_sheriff && (
@@ -330,7 +370,7 @@ export default function GatheringDetailScreen() {
                 )}
               </View>
               <Text style={styles.hostMeta}>{formatTimeAgo(gathering.created_at)} · {gathering.category}</Text>
-            </View>
+            </TouchableOpacity>
             {!isOwn && (
               <TouchableOpacity
                 style={[styles.followBtn, myFollowing.includes(gathering.host_id) && styles.followBtnActive]}
@@ -460,7 +500,7 @@ export default function GatheringDetailScreen() {
                       </TouchableOpacity>
                     </View>
                     {rejectingUid === req.uid && (
-                      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                      <KeyboardAvoidingView behavior="padding">
                         <View style={styles.reasonRow}>
                           <TextInput
                             style={styles.reasonInput}
@@ -735,7 +775,7 @@ const styles = StyleSheet.create({
 
   memberStrip: { marginHorizontal: -16 },
   memberStripContent: { paddingHorizontal: 16, gap: 12, paddingBottom: 4 },
-  memberItem: { alignItems: 'center', width: 64 },
+  memberItem: { alignItems: 'center', width: 76 },
   memberAvatar: {
     width: 56,
     height: 56,
@@ -749,7 +789,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
   },
   memberName: {
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
     color: '#1A1108',
     textAlign: 'center',
@@ -927,4 +967,29 @@ const modal = StyleSheet.create({
   followBtnActive: { backgroundColor: '#FFAC30' },
   followBtnText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Bold', color: '#FFAC30' },
   followBtnTextActive: { color: '#1A1108' },
+});
+
+const menuStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
+  },
+  sep: { height: 1, backgroundColor: '#F5F5F5' },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+  },
+  itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
+  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9E9E9E' },
 });

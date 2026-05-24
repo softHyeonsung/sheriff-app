@@ -7,7 +7,7 @@ import { create } from 'zustand';
 
 export interface MapPin {
   id: string;
-  type: 'gathering' | 'saved';
+  type: 'gathering' | 'saved' | 'post';
   lat: number;
   lng: number;
   title: string;
@@ -29,45 +29,49 @@ export interface PlaceResult {
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 interface MapOverlayState {
-  placeResults:   PlaceResult[];
-  selectedPlace:  PlaceResult | null;
-  selectedPin:    MapPin      | null;
-  showResults:    boolean;
-  activeCategory: string | null;
-  savedPlaces:    MapPin[];
+  placeResults:    PlaceResult[];
+  selectedPlace:   PlaceResult | null;
+  selectedPin:     MapPin      | null;
+  showResults:     boolean;
+  activeCategory:  string | null;
+  savedPlaces:     MapPin[];
+  feedSearchQuery: string | null; // 지도 → 피드 탭 검색어 전달
 
   // Registered by the map screen so the overlay can send WebView commands
   _sendToMap: ((msg: object) => void) | null;
 
   // Actions
-  setPlaceResults:   (r: PlaceResult[])          => void;
-  setSelectedPlace:  (p: PlaceResult | null)      => void;
-  setSelectedPin:    (p: MapPin      | null)      => void;
-  setShowResults:    (v: boolean)                 => void;
-  setActiveCategory: (v: string | null)           => void;
-  registerSend:      (fn: (msg: object) => void)  => void;
-  clearPlaces:       ()                           => void;
-  hideCard:          ()                           => void;
-  savePlace:         (place: PlaceResult)         => void;
-  unsavePlace:       (id: string)                 => void;
-  loadSavedPlaces:   (pins: MapPin[])             => void;
+  setPlaceResults:    (r: PlaceResult[])          => void;
+  setSelectedPlace:   (p: PlaceResult | null)      => void;
+  setSelectedPin:     (p: MapPin      | null)      => void;
+  setShowResults:     (v: boolean)                 => void;
+  setActiveCategory:  (v: string | null)           => void;
+  setFeedSearchQuery: (q: string | null)           => void;
+  registerSend:       (fn: (msg: object) => void)  => void;
+  clearPlaces:        ()                           => void;
+  hideCard:           ()                           => void;
+  savePlace:          (place: PlaceResult)         => void;
+  unsavePlace:        (id: string)                 => void;
+  loadSavedPlaces:    (pins: MapPin[])             => void;
 }
 
 export const useMapStore = create<MapOverlayState>((set) => ({
-  placeResults:   [],
-  selectedPlace:  null,
-  selectedPin:    null,
-  showResults:    false,
-  activeCategory: null,
-  savedPlaces:    [], // TODO: persist via zustand-persist + AsyncStorage (Firestore sync: MAP-03)
-  _sendToMap:     null,
+  placeResults:    [],
+  selectedPlace:   null,
+  selectedPin:     null,
+  showResults:     false,
+  activeCategory:  null,
+  savedPlaces:     [], // TODO: persist via zustand-persist + AsyncStorage (Firestore sync: MAP-03)
+  feedSearchQuery: null,
+  _sendToMap:      null,
 
-  setPlaceResults:   (placeResults)   => set({ placeResults }),
-  setSelectedPlace:  (selectedPlace)  => set({ selectedPlace, selectedPin: null }),
-  setSelectedPin:    (selectedPin)    => set({ selectedPin, selectedPlace: null }),
-  setShowResults:    (showResults)    => set({ showResults }),
-  setActiveCategory: (activeCategory) => set({ activeCategory }),
-  registerSend:      (fn)             => set({ _sendToMap: fn }),
+  setPlaceResults:    (placeResults)    => set({ placeResults }),
+  setSelectedPlace:   (selectedPlace)   => set({ selectedPlace, selectedPin: null }),
+  setSelectedPin:     (selectedPin)     => set({ selectedPin, selectedPlace: null }),
+  setShowResults:     (showResults)     => set({ showResults }),
+  setActiveCategory:  (activeCategory)  => set({ activeCategory }),
+  setFeedSearchQuery: (feedSearchQuery) => set({ feedSearchQuery }),
+  registerSend:       (fn)              => set({ _sendToMap: fn }),
 
   clearPlaces: () => set({
     placeResults:   [],

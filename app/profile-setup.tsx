@@ -1,6 +1,6 @@
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -12,32 +12,100 @@ import {
   View,
 } from 'react-native';
 import { auth, db } from '../src/firebaseConfig';
+import KOREA_DISTRICTS from '../src/constants/koreaDistricts';
 import { useAuthStore } from '../src/store/authStore';
 
-const PROVINCES = [
-  '서울특별시', '부산광역시', '대구광역시', '인천광역시',
-  '광주광역시', '대전광역시', '울산광역시', '세종특별자치시',
-  '경기도', '강원특별자치도', '충청북도', '충청남도',
-  '전라북도', '전라남도', '경상북도', '경상남도', '제주특별자치도',
-];
+type PickerStep = 'province' | 'district' | 'dong';
 
 export default function ProfileSetupScreen() {
-  const router            = useRouter();
-  const kakaoUser         = useAuthStore((s) => s.kakaoUser);
+  const router             = useRouter();
+  const kakaoUser          = useAuthStore((s) => s.kakaoUser);
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
+  const setStoreNickname   = useAuthStore((s) => s.setNickname);
 
   const [nickname,   setNickname]   = useState(kakaoUser?.nickname ?? '');
-  const [region,     setRegion]     = useState('');
-  const [showPicker, setShowPicker] = useState(false);
   const [saving,     setSaving]     = useState(false);
+
+  // 3-step address
+  const [selectedProvince, setSelectedProvince] = useState('');
+  const [selectedDistrict, setSelectedDistrict] = useState('');
+  const [selectedDong,     setSelectedDong]     = useState('');
+  const [pickerStep,       setPickerStep]       = useState<PickerStep>('province');
+  const [showPicker,       setShowPicker]       = useState(false);
+
+  const PROVINCES  = Object.keys(KOREA_DISTRICTS);
+  const DISTRICTS  = selectedProvince ? Object.keys(KOREA_DISTRICTS[selectedProvince] ?? {}) : [];
+  const DONGS      = (selectedProvince && selectedDistrict)
+    ? (KOREA_DISTRICTS[selectedProvince]?.[selectedDistrict] ?? [])
+    : [];
+
+  const fullAddress = [selectedProvince, selectedDistrict, selectedDong].filter(Boolean).join(' ');
+
+  // Prefill nickname from Firestore for email/Google/Apple users
+  useEffect(() => {
+    if (nickname) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    getDoc(doc(db, 'users', uid)).then((snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (data?.nickname && !nickname) setNickname(data.nickname);
+    }).catch(() => {});
+  }, []);
+
+  const openPicker = () => {
+    setPickerStep('province');
+    setShowPicker(true);
+  };
+
+  const handleProvinceSelect = (item: string) => {
+    setSelectedProvince(item);
+    setSelectedDistrict('');
+    setSelectedDong('');
+    setPickerStep('district');
+  };
+
+  const handleDistrictSelect = (item: string) => {
+    setSelectedDistrict(item);
+    setSelectedDong('');
+    const dongs = KOREA_DISTRICTS[selectedProvince]?.[item] ?? [];
+    if (dongs.length > 0) {
+      setPickerStep('dong');
+    } else {
+      setShowPicker(false);
+    }
+  };
+
+  const handleDongSelect = (item: string) => {
+    setSelectedDong(item);
+    setShowPicker(false);
+  };
+
+  const pickerTitle = pickerStep === 'province' ? '시·도 선택'
+    : pickerStep === 'district' ? '시·군·구 선택'
+    : '읍·면·동 선택';
+
+  const pickerData = pickerStep === 'province' ? PROVINCES
+    : pickerStep === 'district' ? DISTRICTS
+    : DONGS;
+
+  const handlePickerItem = (item: string) => {
+    if (pickerStep === 'province') handleProvinceSelect(item);
+    else if (pickerStep === 'district') handleDistrictSelect(item);
+    else handleDongSelect(item);
+  };
+
+  const currentSelected = pickerStep === 'province' ? selectedProvince
+    : pickerStep === 'district' ? selectedDistrict
+    : selectedDong;
 
   const handleSave = async () => {
     if (!nickname.trim()) {
       Alert.alert('닉네임을 입력해주세요.');
       return;
     }
-    if (!region) {
-      Alert.alert('거주 지역을 선택해주세요.');
+    if (!selectedProvince || !selectedDistrict || !selectedDong) {
+      Alert.alert('거주 지역을 읍·면·동 단위까지 선택해주세요.');
       return;
     }
     const uid = auth.currentUser?.uid;
@@ -50,10 +118,11 @@ export default function ProfileSetupScreen() {
     try {
       await updateDoc(doc(db, 'users', uid), {
         nickname:         nickname.trim(),
-        home_address:     region,
+        home_address:     fullAddress,
         profile_complete: true,
       });
       setProfileComplete(true);
+      setStoreNickname(nickname.trim());
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('저장 실패', e?.message ?? '잠시 후 다시 시도해주세요.');
@@ -92,12 +161,35 @@ export default function ProfileSetupScreen() {
         <Text style={styles.label}>
           거주 지역 <Text style={styles.required}>*</Text>
         </Text>
-        <TouchableOpacity style={styles.regionBtn} onPress={() => setShowPicker(true)}>
-          <Text style={[styles.regionBtnText, !region && styles.placeholder]}>
-            {region || '지역을 선택하세요'}
+        <TouchableOpacity style={styles.regionBtn} onPress={openPicker}>
+          <Text style={[styles.regionBtnText, !fullAddress && styles.placeholder]}>
+            {fullAddress || '지역을 선택하세요'}
           </Text>
           <Text style={styles.arrow}>›</Text>
         </TouchableOpacity>
+        {(selectedProvince || selectedDistrict || selectedDong) && (
+          <View style={styles.breadcrumb}>
+            {selectedProvince ? (
+              <TouchableOpacity onPress={() => { setPickerStep('province'); setShowPicker(true); }}>
+                <Text style={styles.breadcrumbItem}>{selectedProvince}</Text>
+              </TouchableOpacity>
+            ) : null}
+            {selectedDistrict ? (
+              <>
+                <Text style={styles.breadcrumbSep}> › </Text>
+                <TouchableOpacity onPress={() => { setPickerStep('district'); setShowPicker(true); }}>
+                  <Text style={styles.breadcrumbItem}>{selectedDistrict}</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+            {selectedDong ? (
+              <>
+                <Text style={styles.breadcrumbSep}> › </Text>
+                <Text style={[styles.breadcrumbItem, styles.breadcrumbFinal]}>{selectedDong}</Text>
+              </>
+            ) : null}
+          </View>
+        )}
       </View>
 
       {/* 시작 버튼 */}
@@ -109,27 +201,30 @@ export default function ProfileSetupScreen() {
         <Text style={styles.saveBtnText}>{saving ? '저장 중...' : '보안관 시작하기'}</Text>
       </TouchableOpacity>
 
-      {/* 지역 선택 모달 */}
+      {/* 3-step 지역 선택 모달 */}
       <Modal visible={showPicker} animationType="slide" transparent>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>거주 지역 선택</Text>
+            <Text style={styles.sheetTitle}>{pickerTitle}</Text>
             <FlatList
-              data={PROVINCES}
+              data={pickerData}
               keyExtractor={(item) => item}
               renderItem={({ item }) => (
                 <TouchableOpacity
-                  style={[styles.regionItem, region === item && styles.regionItemSelected]}
-                  onPress={() => { setRegion(item); setShowPicker(false); }}
+                  style={[styles.regionItem, item === currentSelected && styles.regionItemSelected]}
+                  onPress={() => handlePickerItem(item)}
                 >
-                  <Text style={[styles.regionItemText, region === item && styles.regionItemTextSelected]}>
+                  <Text style={[styles.regionItemText, item === currentSelected && styles.regionItemTextSelected]}>
                     {item}
                   </Text>
-                  {region === item && <Text style={styles.checkmark}>✓</Text>}
+                  {item === currentSelected && <Text style={styles.checkmark}>✓</Text>}
                 </TouchableOpacity>
               )}
             />
+            <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowPicker(false)}>
+              <Text style={styles.cancelBtnText}>취소</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -204,12 +299,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',
     color: '#1A1108',
+    flex: 1,
   },
   placeholder: {
     color: '#9E9E9E',
   },
   arrow: {
     fontSize: 20,
+    color: '#9E9E9E',
+  },
+  breadcrumb: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 4,
+    flexWrap: 'wrap',
+  },
+  breadcrumbItem: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#FFAC30',
+    textDecorationLine: 'underline',
+  },
+  breadcrumbFinal: {
+    textDecorationLine: 'none',
+    color: '#1A1108',
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+  breadcrumbSep: {
+    fontSize: 13,
     color: '#9E9E9E',
   },
   saveBtn: {
@@ -243,7 +361,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: 12,
-    paddingBottom: 40,
+    paddingBottom: 16,
     maxHeight: '75%',
   },
   sheetHandle: {
@@ -286,5 +404,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFAC30',
     fontFamily: 'AppleSDGothicNeo-Bold',
+  },
+  cancelBtn: {
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F5F5',
+  },
+  cancelBtnText: {
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9E9E9E',
   },
 });

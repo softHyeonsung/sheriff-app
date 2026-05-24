@@ -20,21 +20,24 @@ interface Props {
   onClose: () => void;
   myUid: string;
   shareText: string;
+  onShare?: () => void;
 }
 
-export default function ShareModal({ visible, onClose, myUid, shareText }: Props) {
+export default function ShareModal({ visible, onClose, myUid, shareText, onShare }: Props) {
   const insets = useSafeAreaInsets();
   const [following, setFollowing] = useState<FollowUserProfile[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [sentUids, setSentUids] = useState<string[]>([]);
   const [sending, setSending] = useState<string | null>(null);
+  const sharedRef = React.useRef(false);
 
   useEffect(() => {
     if (!visible || !myUid) return;
     setLoading(true);
     setQuery('');
     setSentUids([]);
+    sharedRef.current = false;
     fetchFollowing(myUid)
       .then(setFollowing)
       .catch(() => setFollowing([]))
@@ -52,6 +55,10 @@ export default function ShareModal({ visible, onClose, myUid, shareText }: Props
       const roomId = await getOrCreateDMRoom(myUid, targetUid);
       await sendMessage(roomId, myUid, shareText);
       setSentUids((prev) => [...prev, targetUid]);
+      if (!sharedRef.current) {
+        sharedRef.current = true;
+        onShare?.();
+      }
     } finally {
       setSending(null);
     }

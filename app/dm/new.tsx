@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -44,6 +45,8 @@ export default function NewDMScreen() {
     try {
       const roomId = await getOrCreateDMRoom(myUid, other.uid);
       router.replace(`/dm/${roomId}` as any);
+    } catch (e: any) {
+      Alert.alert('오류', e?.message ?? '채팅방을 만들 수 없어요. 잠시 후 다시 시도해주세요.');
     } finally {
       setStarting(false);
     }

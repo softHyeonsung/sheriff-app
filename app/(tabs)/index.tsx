@@ -5,9 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
+  FlatList,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,9 +22,17 @@ import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadSavedPins } from '../../src/api/savedPlaces';
 import { fetchNearbyTourSpots } from '../../src/api/tourApi';
+import {
+  ChatRoom,
+  UserProfile,
+  fetchMyRooms,
+  getUserProfile,
+  sendMapShareMessage,
+} from '../../src/api/chat';
 import KOREA_DISTRICTS from '../../src/constants/koreaDistricts';
 import { haversineM } from '../../src/constants/mockGatherings';
 import { FirestoreGathering, subscribeGatherings } from '../../src/api/gatherings';
+import { FirestorePost, subscribeFeedPosts } from '../../src/api/posts';
 import { useAuthStore } from '../../src/store/authStore';
 import { MapPin, PlaceResult, useMapStore } from '../../src/store/mapStore';
 
@@ -39,6 +50,7 @@ const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '6d840fb987
 const PIN_COLORS: Record<MapPin['type'], string> = {
   gathering: '#FFAC30',
   saved:     '#4CAF6A',
+  post:      '#5B82DB',
 };
 
 const MODE_CONFIG: { mode: MapMode; icon: IoniconName; color: string; iconColor: string; label: string }[] = [
@@ -162,7 +174,7 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
       var filtered = PINS.filter(function(pin) {
         if (mode === 'my_map')      return pin.type === 'saved';
         if (mode === 'gathering')   return pin.type === 'gathering';
-        return pin.type === 'gathering'; // basic: no saved pins
+        return pin.type === 'gathering' || pin.type === 'post'; // basic
       });
       filtered.forEach(function(pin) {
         var markerSrc = (pin.type === 'gathering')
@@ -216,6 +228,7 @@ const buildMapHTML = (apiKey: string, pins: MapPin[]) => `
         if      (msg.type === 'SET_LOCATION')      { map.setCenter(new kakao.maps.LatLng(msg.lat, msg.lng)); updateMyLocation(msg.lat, msg.lng); }
         else if (msg.type === 'MY_LOCATION')        { updateMyLocation(msg.lat, msg.lng); }
         else if (msg.type === 'CENTER')             { map.panTo(new kakao.maps.LatLng(msg.lat, msg.lng)); }
+        else if (msg.type === 'GO_TO')              { map.setCenter(new kakao.maps.LatLng(msg.lat, msg.lng)); if (msg.level) map.setLevel(msg.level); }
         else if (msg.type === 'SET_MODE')           { currentMode = msg.mode; renderPins(currentMode); }
         else if (msg.type === 'SHOW_PLACE_MARKERS') { showPlaceMarkers(msg.places); }
         else if (msg.type === 'CLEAR_PLACES')       { clearPlaceMarkers(); }
@@ -264,6 +277,7 @@ export default function MapScreen() {
   const router = useRouter();
 
   const [gatherings, setGatherings] = useState<FirestoreGathering[]>([]);
+  const [posts,      setPosts]      = useState<FirestorePost[]>([]);
   const [mode,               setMode]               = useState<MapMode>('basic');
   const modeRef              = useRef<MapMode>('basic');
   const [gatheringCatFilter, setGatheringCatFilter] = useState<string>('전체');
@@ -276,6 +290,13 @@ export default function MapScreen() {
   const [selectedSiGunGu, setSelectedSiGunGu] = useState<string | null>(null);
   const [selectedEupMyeonDong, setSelectedEupMyeonDong] = useState<string | null>(null);
   const [openDrop, setOpenDrop] = useState<'do' | 'sigungu' | 'eupMyeonDong' | null>(null);
+
+  // Map share modal
+  const [shareModalVisible, setShareModalVisible]   = useState(false);
+  const [shareRooms,        setShareRooms]          = useState<ChatRoom[]>([]);
+  const [shareProfiles,     setShareProfiles]       = useState<Record<string, UserProfile>>({});
+  const [shareLoading,      setShareLoading]        = useState(false);
+  const [shareSending,      setShareSending]        = useState<string | null>(null);
 
   const DO_LIST      = Object.keys(KOREA_DISTRICTS);
   const SI_GUN_GU_LIST = selectedDo ? Object.keys(KOREA_DISTRICTS[selectedDo] ?? {}) : [];
@@ -291,6 +312,7 @@ export default function MapScreen() {
   // Store actions
   const {
     activeCategory,
+    placeResults,
     selectedPin,
     selectedPlace,
     setPlaceResults,
@@ -321,6 +343,27 @@ export default function MapScreen() {
     const unsub = subscribeGatherings(setGatherings);
     return unsub;
   }, []);
+
+  // Subscribe to posts for post pins (basic mode)
+  useEffect(() => {
+    const unsub = subscribeFeedPosts(setPosts);
+    return unsub;
+  }, []);
+
+  // Derive post pins — only posts with a real location_pin
+  const postPins: MapPin[] = useMemo(() =>
+    posts
+      .filter((p) => p.location_pin?.x && p.location_pin?.y)
+      .map((p) => ({
+        id:       p.id,
+        type:     'post' as const,
+        lat:      parseFloat(p.location_pin!.y),
+        lng:      parseFloat(p.location_pin!.x),
+        title:    p.location_pin!.place_name,
+        subtitle: p.author_nickname,
+      })),
+    [posts],
+  );
 
   // Load saved places from Firestore on mount
   useEffect(() => {
@@ -373,9 +416,9 @@ export default function MapScreen() {
   // Mode sync — sync PINS then switch mode, clear place markers on non-basic
   useEffect(() => {
     if (!mapReady) return;
-    // Send up-to-date pins BEFORE SET_MODE so renderPins always has fresh saved places
     const { savedPlaces: latestSaved } = useMapStore.getState();
-    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...latestSaved] });
+    const extra = mode === 'basic' ? postPins : [];
+    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...latestSaved, ...extra] });
     send({ type: 'SET_MODE', mode });
     if (mode !== 'basic') {
       send({ type: 'CLEAR_PLACES' });
@@ -383,14 +426,15 @@ export default function MapScreen() {
     } else if (nearbyTourSpots.current.length > 0) {
       send({ type: 'SHOW_PLACE_MARKERS', places: nearbyTourSpots.current });
     }
-  }, [mode, mapReady, send, clearPlaces]);
+  }, [mode, mapReady, send, clearPlaces, postPins]);
 
-  // Sync savedPlaces to WebView whenever they change (gathering manages its own pins)
+  // Sync savedPlaces + postPins to WebView whenever they change
   useEffect(() => {
     if (!mapReady) return;
     if (modeRef.current === 'gathering') return;
-    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...savedPlaces] });
-  }, [mapReady, savedPlaces, send]);
+    const extra = modeRef.current === 'basic' ? postPins : [];
+    send({ type: 'UPDATE_APP_PINS', pins: [...MOCK_PINS, ...savedPlaces, ...extra] });
+  }, [mapReady, savedPlaces, postPins, send]);
 
   // Gathering pins — compute 15 nearest and push when in gathering mode
   useEffect(() => {
@@ -508,7 +552,7 @@ export default function MapScreen() {
       + `?category_group_code=${cat.code}&x=${loc.lng}&y=${loc.lat}&radius=1000&sort=distance&size=15`;
     const results = await kakaoLocalSearch(url);
     setPlaceResults(results);
-    if (results.length > 0) setShowResults(true);
+    if (results.length > 0 && modeRef.current !== 'my_map') setShowResults(true);
     if (modeRef.current === 'basic') send({ type: 'SHOW_PLACE_MARKERS', places: results });
   };
 
@@ -554,6 +598,67 @@ export default function MapScreen() {
     }
   };
 
+  const handleViewRegion = async () => {
+    const parts = [selectedDo, selectedSiGunGu, selectedEupMyeonDong].filter(Boolean);
+    if (parts.length === 0) return;
+    const query = parts.join(' ');
+    // Zoom level: deeper selection = more zoomed in
+    const level = selectedEupMyeonDong ? 5 : selectedSiGunGu ? 7 : 9;
+    try {
+      const res = await fetch(
+        `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=1`,
+        { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } },
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      const doc = json.documents?.[0];
+      if (!doc) return;
+      const lat = parseFloat(doc.y);
+      const lng = parseFloat(doc.x);
+      setOpenDrop(null);
+      send({ type: 'GO_TO', lat, lng, level });
+      const places = await fetchNearbyTourSpots(lat, lng);
+      nearbyTourSpots.current = places;
+      setPlaceResults(places);
+      if (places.length > 0) send({ type: 'SHOW_PLACE_MARKERS', places });
+    } catch (e) {
+      console.warn('[viewRegion]', e);
+    }
+  };
+
+  // ── Share modal helpers ────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!shareModalVisible || !currentUid) return;
+    setShareLoading(true);
+    fetchMyRooms(currentUid)
+      .then(async (rooms) => {
+        const dmRooms = rooms.filter((r) => r.room_type === 'dm');
+        setShareRooms(dmRooms);
+        const uids = [...new Set(dmRooms.flatMap((r) => r.members.filter((m) => m !== currentUid)))];
+        const profileMap: Record<string, UserProfile> = {};
+        await Promise.all(uids.map(async (uid) => {
+          const p = await getUserProfile(uid);
+          if (p) profileMap[uid] = p;
+        }));
+        setShareProfiles(profileMap);
+      })
+      .finally(() => setShareLoading(false));
+  }, [shareModalVisible, currentUid]);
+
+  const handleShareToRoom = async (room: ChatRoom) => {
+    if (!currentUid || shareSending) return;
+    setShareSending(room.room_id);
+    try {
+      const myProfile = await getUserProfile(currentUid);
+      await sendMapShareMessage(room.room_id, currentUid, myProfile?.nickname ?? '나', savedPlaces.length, room.members);
+      setShareModalVisible(false);
+    } catch (e) {
+      console.warn('[share] send failed:', e);
+    } finally {
+      setShareSending(null);
+    }
+  };
+
   const visiblePinCount = mode === 'my_map'
     ? savedPlaces.length
     : MOCK_PINS.filter((p) => {
@@ -570,12 +675,13 @@ export default function MapScreen() {
       <WebView
         ref={webRef}
         style={StyleSheet.absoluteFillObject}
-        source={{ html: mapHtml }}
-        originWhitelist={['https://*', 'about:blank']}
+        source={{ html: mapHtml, baseUrl: 'https://sheriff-app-dab41.web.app' }}
+        originWhitelist={['*']}
         javaScriptEnabled
         domStorageEnabled
         onMessage={onMessage}
         scrollEnabled={false}
+        allowUniversalAccessFromFileURLs
       />
 
       {/* Amber gradient wash */}
@@ -613,7 +719,7 @@ export default function MapScreen() {
 
       {/* ── Place category chips (basic / my_map) ── */}
       {mode !== 'gathering' && (
-        <View style={[styles.categoryRow, { top: insets.top + 120 }]}>
+        <View style={[styles.categoryRow, { top: mode === 'basic' ? insets.top + 120 : insets.top + 64 }]}>
           {PLACE_CATEGORIES.map((cat) => (
             <TouchableOpacity
               key={cat.key}
@@ -652,6 +758,39 @@ export default function MapScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+      )}
+
+      {/* ── My Own mode inline place results ── */}
+      {mode === 'my_map' && activeCategory && placeResults.length > 0 && (
+        <View style={[styles.myMapResultsWrap, { top: insets.top + 108 }]}>
+          <FlatList
+            data={placeResults}
+            keyExtractor={(item) => item.id}
+            style={styles.myMapResultsList}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.myMapResultCard}
+                onPress={() => setSelectedPlace(item)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.myMapResultInfo}>
+                  <Text style={styles.myMapResultName} numberOfLines={1}>{item.place_name}</Text>
+                  <Text style={styles.myMapResultAddr} numberOfLines={1}>
+                    {item.road_address_name || item.address_name}
+                  </Text>
+                </View>
+                {item.distance ? (
+                  <Text style={styles.myMapResultDist}>{Number(item.distance) >= 1000
+                    ? `${(Number(item.distance) / 1000).toFixed(1)}km`
+                    : `${item.distance}m`}
+                  </Text>
+                ) : null}
+              </TouchableOpacity>
+            )}
+            ItemSeparatorComponent={() => <View style={styles.myMapResultSep} />}
+          />
+        </View>
       )}
 
       {/* ── Area selector + 게시물 보기 (basic mode only) ── */}
@@ -748,15 +887,15 @@ export default function MapScreen() {
             )}
           </View>
 
-          {/* 게시물 보기 */}
+          {/* 이 지역 보기 */}
           <TouchableOpacity
-            style={styles.viewPostsBtn}
-            onPress={() => router.push('/(tabs)/feed')}
-            activeOpacity={0.85}
-            accessibilityLabel="이 지역 게시물 보기"
+            style={[styles.viewPostsBtn, !selectedDo && styles.viewPostsBtnDisabled]}
+            onPress={handleViewRegion}
+            activeOpacity={selectedDo ? 0.85 : 1}
+            accessibilityLabel="이 지역 보기"
           >
-            <Ionicons name="chatbox-outline" size={14} color="#1A1108" />
-            <Text style={styles.viewPostsBtnText}>게시물 보기</Text>
+            <Ionicons name="location-outline" size={14} color="#1A1108" />
+            <Text style={styles.viewPostsBtnText}>이 지역 보기</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -831,24 +970,104 @@ export default function MapScreen() {
           })()}
         </View>
 
-        {/* Locate FAB */}
-        <TouchableOpacity
-          style={styles.locationFab}
-          onPress={() => send({ type: 'CENTER', ...center })}
-          activeOpacity={0.8}
-          accessibilityLabel="현재 위치로 이동"
-        >
-          <Ionicons name="locate" size={26} color="#FFAC30" />
-        </TouchableOpacity>
+        {/* My Own empty state — 두 버튼 사이 중앙 */}
+        {mode === 'my_map' && visiblePinCount === 0 && !selectedPin && !selectedPlace && (
+          <View style={styles.myMapEmptyInline}>
+            <Text style={styles.myMapEmptyText}>저장된 장소가 없어요</Text>
+          </View>
+        )}
+
+        {/* Right side: share (my_map only, above) + locate */}
+        <View style={styles.fabGroup}>
+          {mode === 'my_map' && (
+            <TouchableOpacity
+              style={styles.shareFab}
+              onPress={() => setShareModalVisible(true)}
+              activeOpacity={0.8}
+              accessibilityLabel="지도 공유"
+            >
+              <Ionicons name="share-social" size={20} color="#1A1108" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.locationFab}
+            onPress={() => send({ type: 'CENTER', ...center })}
+            activeOpacity={0.8}
+            accessibilityLabel="현재 위치로 이동"
+          >
+            <Ionicons name="locate" size={26} color="#FFAC30" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* 내 지도 empty state */}
-      {mode === 'my_map' && visiblePinCount === 0 && !selectedPin && !selectedPlace && (
-        <View style={[styles.myMapEmpty, { bottom: bottomRowY + 60 }]}>
-          <Text style={styles.myMapEmptyText}>아직 저장한 장소가 없어요</Text>
-          <Text style={styles.myMapEmptyHint}>지도에서 핀을 탭하면 저장할 수 있어요</Text>
+      {/* ── Map Share Modal ── */}
+      <Modal
+        visible={shareModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShareModalVisible(false)}
+        statusBarTranslucent
+      >
+        <View style={shareStyles.overlay}>
+          <TouchableOpacity style={StyleSheet.absoluteFillObject} activeOpacity={1} onPress={() => setShareModalVisible(false)} />
+          <View style={[shareStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={shareStyles.handle} />
+            <View style={shareStyles.sheetHeader}>
+              <Text style={shareStyles.sheetTitle}>DM으로 지도 공유</Text>
+              <TouchableOpacity onPress={() => setShareModalVisible(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={22} color="#1A1108" />
+              </TouchableOpacity>
+            </View>
+            <Text style={shareStyles.sheetSub}>내 저장 장소 {savedPlaces.length}곳을 공유해요</Text>
+
+            {shareLoading ? (
+              <View style={shareStyles.loadingWrap}>
+                <ActivityIndicator color="#FFAC30" />
+              </View>
+            ) : shareRooms.length === 0 ? (
+              <View style={shareStyles.emptyWrap}>
+                <Ionicons name="chatbubble-outline" size={32} color="#D4D4D4" />
+                <Text style={shareStyles.emptyText}>대화 중인 DM이 없어요</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={shareRooms}
+                keyExtractor={(r) => r.room_id}
+                style={shareStyles.roomList}
+                renderItem={({ item }) => {
+                  const otherUid = item.members.find((m) => m !== currentUid) ?? '';
+                  const profile = shareProfiles[otherUid];
+                  const isSending = shareSending === item.room_id;
+                  return (
+                    <TouchableOpacity
+                      style={shareStyles.roomRow}
+                      onPress={() => handleShareToRoom(item)}
+                      disabled={!!shareSending}
+                      activeOpacity={0.7}
+                    >
+                      <View style={shareStyles.roomAvatar}>
+                        <Text style={shareStyles.roomAvatarText}>
+                          {(profile?.nickname ?? '?')[0].toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={shareStyles.roomName} numberOfLines={1}>
+                        {profile?.nickname ?? '상대방'}
+                      </Text>
+                      {isSending ? (
+                        <ActivityIndicator size="small" color="#FFAC30" />
+                      ) : (
+                        <Ionicons name="chevron-forward" size={18} color="#D4D4D4" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+                ItemSeparatorComponent={() => <View style={shareStyles.sep} />}
+              />
+            )}
+          </View>
         </View>
-      )}
+      </Modal>
+
     </View>
   );
 }
@@ -1010,6 +1229,9 @@ const styles = StyleSheet.create({
     fontFamily: 'AppleSDGothicNeo-SemiBold',
     color: '#1A1108',
   },
+  viewPostsBtnDisabled: {
+    opacity: 0.4,
+  },
 
   // Re-search button
   reSearchRow: {
@@ -1089,7 +1311,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 28, right: 28,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     zIndex: 60,
   },
@@ -1119,6 +1341,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D4D4D4',
   },
+  fabGroup: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 10,
+  },
+  shareFab: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   locationFab: {
     width: 48,
     height: 48,
@@ -1133,7 +1375,14 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
 
-  // My map empty
+  // My map empty — inline between bottom buttons
+  myMapEmptyInline: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    pointerEvents: 'none',
+  },
   myMapEmpty: {
     position: 'absolute',
     left: 16, right: 16,
@@ -1151,14 +1400,162 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   myMapEmptyText: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+
+  // My Own inline results
+  myMapResultsWrap: {
+    position: 'absolute',
+    left: 12, right: 12,
+    maxHeight: 260,
+    zIndex: 65,
+  },
+  myMapResultsList: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  myMapResultCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  myMapResultInfo: {
+    flex: 1,
+  },
+  myMapResultName: {
+    fontSize: 14,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+    marginBottom: 2,
+  },
+  myMapResultAddr: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9A9A9A',
+  },
+  myMapResultDist: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Medium',
+    color: '#FFAC30',
+    marginLeft: 8,
+  },
+  myMapResultSep: {
+    height: 1,
+    backgroundColor: '#F5F5F5',
+    marginHorizontal: 16,
+  },
+});
+
+const shareStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.38)',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 12,
+    maxHeight: '70%',
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D4D4D4',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#1A1108',
+  },
+  sheetSub: {
+    fontSize: 13,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9A9A9A',
+    marginBottom: 16,
+  },
+  loadingWrap: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  emptyWrap: {
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 10,
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9A9A9A',
+  },
+  roomList: {
+    maxHeight: 320,
+  },
+  roomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  roomAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF0D4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFAC30',
+  },
+  roomAvatarText: {
+    fontSize: 18,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#1A1108',
+  },
+  roomName: {
+    flex: 1,
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-SemiBold',
     color: '#1A1108',
-    marginBottom: 4,
   },
-  myMapEmptyHint: {
-    fontSize: 12,
-    fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#1A1108',
+  sep: {
+    height: 1,
+    backgroundColor: '#F5F5F5',
   },
 });

@@ -17,7 +17,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { logout } from '../../src/api/auth';
 import { clearKakaoSession } from '../../src/api/kakaoAuth';
-import { FirestorePost, subscribeFeedPosts } from '../../src/api/posts';
+import { FirestorePost, deletePost, subscribeFeedPosts } from '../../src/api/posts';
+import { FirestoreGathering, subscribeGatherings } from '../../src/api/gatherings';
 import { loadSavedPins } from '../../src/api/savedPlaces';
 import { FollowUserProfile, LeaderboardEntry, UserProfile, fetchFollowers, fetchFollowing, fetchLeaderboard, fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
 import { MapPin } from '../../src/store/mapStore';
@@ -41,7 +42,7 @@ export default function ProfileScreen() {
   const kakaoUser    = useAuthStore((s) => s.kakaoUser);
   const firebaseUser = useAuthStore((s) => s.user);
 
-  const [activeTab, setActiveTab]           = useState<'posts' | 'badges'>('posts');
+  const [activeTab, setActiveTab]           = useState<'posts' | 'gatherings' | 'badges'>('posts');
   const [showScoreModal, setShowScoreModal] = useState(false);
   const [scoreTab, setScoreTab]             = useState<'activity' | 'ranking'>('activity');
   const [listModal, setListModal]           = useState<ListModalType>(null);
@@ -49,7 +50,8 @@ export default function ProfileScreen() {
   const [myPosts, setMyPosts]               = useState<FirestorePost[]>([]);
   const [followersList, setFollowersList]   = useState<FollowUserProfile[]>([]);
   const [followingList, setFollowingList]   = useState<FollowUserProfile[]>([]);
-  const [savedPinsList, setSavedPinsList]   = useState<MapPin[]>([]);
+  const [savedPinsList,  setSavedPinsList]  = useState<MapPin[]>([]);
+  const [myGatherings,  setMyGatherings]   = useState<FirestoreGathering[]>([]);
   const [listLoading, setListLoading]       = useState(false);
   const [leaderboard, setLeaderboard]       = useState<LeaderboardEntry[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
@@ -61,10 +63,15 @@ export default function ProfileScreen() {
     if (!uid) return;
     fetchMyProfile(uid).then(setProfile).catch(() => {});
     loadSavedPins(uid).then(setSavedPinsList).catch(() => {});
-    const unsub = subscribeFeedPosts((all) => {
+    const unsubPosts = subscribeFeedPosts((all) => {
       setMyPosts(all.filter((p) => p.author_id === uid));
     });
-    return unsub;
+    const unsubGatherings = subscribeGatherings((all) => {
+      setMyGatherings(
+        all.filter((g) => g.host_id === uid || g.participants.some((p) => p.uid === uid))
+      );
+    });
+    return () => { unsubPosts(); unsubGatherings(); };
   }, [uid]);
 
   useEffect(() => {
@@ -165,7 +172,9 @@ export default function ProfileScreen() {
         <View style={styles.headerRight}>
           <View style={styles.nicknameRow}>
             <Text style={styles.nickname}>{nickname}</Text>
-            <ShieldIcon size={18} />
+            {profile?.badge_list?.some((id) => /^sheriff_\d{4}_\d{2}$/.test(id)) && (
+              <ShieldIcon size={18} />
+            )}
           </View>
           <TouchableOpacity style={styles.rankChip} onPress={() => setShowScoreModal(true)} activeOpacity={0.75}>
             <Ionicons name="trophy" size={12} color="#FFAC30" />
@@ -221,14 +230,14 @@ export default function ProfileScreen() {
 
       {/* ── Content tabs ──────────────────────────────────────────────── */}
       <View style={styles.tabBar}>
-        {(['posts', 'badges'] as const).map((tab) => (
+        {(['posts', 'gatherings', 'badges'] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
-              {tab === 'posts' ? '게시물' : '뱃지'}
+              {tab === 'posts' ? '게시물' : tab === 'gatherings' ? '모임' : '뱃지'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -239,7 +248,12 @@ export default function ProfileScreen() {
         myPosts.length > 0 ? (
           <View style={styles.grid}>
             {myPosts.map((post) => (
-              <TouchableOpacity key={post.id} activeOpacity={0.85} style={styles.gridCell}>
+              <TouchableOpacity
+                key={post.id}
+                activeOpacity={0.85}
+                style={styles.gridCell}
+                onPress={() => router.push(`/post/${post.id}` as any)}
+              >
                 {post.media_urls?.[0] ? (
                   <Image source={{ uri: post.media_urls[0] }} style={styles.gridImage} />
                 ) : (
@@ -254,6 +268,55 @@ export default function ProfileScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="image-outline" size={40} color="#D4D4D4" />
             <Text style={styles.emptyText}>아직 게시물이 없어요</Text>
+          </View>
+        )
+      )}
+
+      {/* ── Gathering list ────────────────────────────────────────────── */}
+      {activeTab === 'gatherings' && (
+        myGatherings.length > 0 ? (
+          <View style={styles.gatheringList}>
+            {myGatherings.map((g) => {
+              const isHost = g.host_id === uid;
+              const statusColor =
+                g.status === 'recruiting' ? '#4CAF6A' :
+                g.status === 'full'       ? '#FFAC30' : '#9A9A9A';
+              const statusLabel =
+                g.status === 'recruiting' ? '모집 중' :
+                g.status === 'full'       ? '모집 완료' :
+                g.status === 'completed'  ? '완료' : '취소됨';
+              return (
+                <TouchableOpacity
+                  key={g.id}
+                  style={styles.gatheringCard}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/gathering/${g.id}` as any)}
+                >
+                  <View style={styles.gatheringCardTop}>
+                    <View style={styles.gatheringMeta}>
+                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                      <Text style={[styles.statusLabel, { color: statusColor }]}>{statusLabel}</Text>
+                      {isHost && <View style={styles.hostBadge}><Text style={styles.hostBadgeText}>호스트</Text></View>}
+                    </View>
+                    <Text style={styles.gatheringCategory}>{g.category}</Text>
+                  </View>
+                  <Text style={styles.gatheringTitle} numberOfLines={1}>{g.title}</Text>
+                  <View style={styles.gatheringFooter}>
+                    <Ionicons name="calendar-outline" size={13} color="#9A9A9A" />
+                    <Text style={styles.gatheringAt} numberOfLines={1}>{g.meeting_at}</Text>
+                    <Ionicons name="people-outline" size={13} color="#9A9A9A" style={{ marginLeft: 10 }} />
+                    <Text style={styles.gatheringMembers}>
+                      {g.participants.length + 1}/{g.max_members}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={40} color="#D4D4D4" />
+            <Text style={styles.emptyText}>참여 중인 모임이 없어요</Text>
           </View>
         )
       )}
@@ -455,11 +518,48 @@ export default function ProfileScreen() {
               </View>
 
               <Text style={styles.historyTitle}>활동 내역</Text>
-              <View style={[styles.historyRow, { justifyContent: 'center' }]}>
-                <Text style={{ color: '#9A9A9A', fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular' }}>
-                  활동 내역 기능을 준비 중이에요
-                </Text>
-              </View>
+              {[
+                {
+                  icon: 'document-text-outline' as const,
+                  label: '게시물 작성',
+                  count: myPosts.length,
+                  pts: myPosts.length * 10,
+                },
+                {
+                  icon: 'people-outline' as const,
+                  label: '모임 참여',
+                  count: myGatherings.length,
+                  pts: myGatherings.length * 15,
+                },
+                {
+                  icon: 'location-outline' as const,
+                  label: '장소 저장',
+                  count: savedPinsList.length,
+                  pts: savedPinsList.length * 15,
+                },
+                ...(profile?.is_home_verified ? [{
+                  icon: 'home-outline' as const,
+                  label: '주거지 인증',
+                  count: null,
+                  pts: 50,
+                }] : []),
+              ].map((item, i, arr) => (
+                <View
+                  key={item.label}
+                  style={[styles.historyRow, i < arr.length - 1 && styles.historyBorder]}
+                >
+                  <View style={styles.historyIconWrap}>
+                    <Ionicons name={item.icon} size={15} color="#FFAC30" />
+                  </View>
+                  <Text style={styles.historyLabel}>{item.label}</Text>
+                  {item.count !== null && (
+                    <Text style={{ fontSize: 13, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9A9A9A', marginRight: 6 }}>
+                      ×{item.count}
+                    </Text>
+                  )}
+                  <Text style={styles.historyPoints}>+{item.pts}pt</Text>
+                </View>
+              ))}
             </>
           )}
 
@@ -709,6 +809,76 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
+  },
+
+  // ── Gathering list ────────────────────────────────────────────────
+  gatheringList: {
+    padding: 16,
+    gap: 12,
+  },
+  gatheringCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+    gap: 6,
+  },
+  gatheringCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  gatheringMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  statusLabel: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+  hostBadge: {
+    backgroundColor: '#FFAC30',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  hostBadgeText: {
+    fontSize: 11,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#1A1108',
+  },
+  gatheringCategory: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9A9A9A',
+  },
+  gatheringTitle: {
+    fontSize: 15,
+    fontFamily: 'AppleSDGothicNeo-SemiBold',
+    color: '#1A1108',
+  },
+  gatheringFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  gatheringAt: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9A9A9A',
+    flex: 1,
+  },
+  gatheringMembers: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#9A9A9A',
   },
 
   // ── Badge grid ────────────────────────────────────────────────────

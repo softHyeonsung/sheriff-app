@@ -40,6 +40,7 @@ export interface FirestorePost {
   tags: string[];
   likes: string[];
   comment_count: number;
+  share_count: number;
   timestamp: Timestamp | null;
 }
 
@@ -94,6 +95,7 @@ export async function createPost(params: {
     tags: params.tags,
     likes: [],
     comment_count: 0,
+    share_count: 0,
     timestamp: serverTimestamp(),
   });
 
@@ -139,6 +141,7 @@ export function subscribeFeedPosts(
         tags: data.tags ?? [],
         likes: data.likes ?? [],
         comment_count: data.comment_count ?? 0,
+        share_count: data.share_count ?? 0,
         timestamp: data.timestamp ?? null,
       };
     });
@@ -163,6 +166,7 @@ export async function fetchPostById(postId: string): Promise<FirestorePost | nul
     tags: data.tags ?? [],
     likes: data.likes ?? [],
     comment_count: data.comment_count ?? 0,
+    share_count: data.share_count ?? 0,
     timestamp: data.timestamp ?? null,
   };
 }
@@ -215,6 +219,10 @@ export function subscribeComments(
     });
     callback(comments);
   }, () => callback([]));
+}
+
+export async function incrementShareCount(postId: string): Promise<void> {
+  await updateDoc(doc(db, 'posts', postId), { share_count: increment(1) }).catch(() => {});
 }
 
 export async function addComment(

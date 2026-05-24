@@ -1,8 +1,9 @@
 ﻿// 경로: app/(tabs)/feed.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   ScrollView,
@@ -20,8 +21,11 @@ import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedP
 import { savePostToFirestore, unsavePostFromFirestore } from '../../src/api/savedPosts';
 import {
   FirestorePost,
+  deletePost,
   formatTimeAgo,
+  incrementShareCount,
   subscribeFeedPosts,
+  subscribeComments,
   toggleLike as toggleLikeFS,
 } from '../../src/api/posts';
 import { useAuthStore } from '../../src/store/authStore';
@@ -45,9 +49,11 @@ function LassoIcon({ size = 19, color = '#1A1108' }: { size?: number; color?: st
 function PostCard({
   post,
   onShare,
+  onDelete,
 }: {
   post: FirestorePost;
   onShare: (p: FirestorePost) => void;
+  onDelete: (postId: string) => void;
 }) {
   const router = useRouter();
   const { width: screenWidth } = useWindowDimensions();
@@ -57,6 +63,12 @@ function PostCard({
   const { savedPlaces, savePlace, unsavePlace } = useMapStore();
   const { savedPostIds, savePost, unsavePost } = usePostStore();
   const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
+
+  const [commentCount, setCommentCount] = useState(post.comment_count ?? 0);
+  useEffect(() => {
+    const unsub = subscribeComments(post.id, (comments) => setCommentCount(comments.length));
+    return unsub;
+  }, [post.id]);
 
   const liked = uid ? post.likes.includes(uid) : false;
   const likeCount = post.likes.length;
@@ -118,10 +130,18 @@ function PostCard({
       >
         {/* Author row */}
         <View style={card.authorRow}>
-          <View style={[card.avatar, post.author_is_sheriff && card.avatarSheriff]}>
-            <Ionicons name="person" size={18} color="#1A1108" />
-          </View>
-          <View style={card.authorInfo}>
+          <TouchableOpacity
+            onPress={() => router.push({ pathname: '/user/[uid]', params: { uid: post.author_id } })}
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <View style={[card.avatar, post.author_is_sheriff && card.avatarSheriff]}>
+              <Ionicons name="person" size={18} color="#1A1108" />
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={card.authorInfo}
+            onPress={() => router.push({ pathname: '/user/[uid]', params: { uid: post.author_id } })}
+          >
             <View style={card.authorNameRow}>
               <Text style={card.authorName}>{post.author_nickname}</Text>
               {post.author_is_sheriff && (
@@ -132,10 +152,32 @@ function PostCard({
               )}
             </View>
             <Text style={card.meta}>{formatTimeAgo(post.timestamp)}</Text>
-          </View>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="ellipsis-horizontal" size={18} color="#1A1108" />
           </TouchableOpacity>
+          {uid === post.author_id && (
+            <TouchableOpacity
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={() =>
+                Alert.alert('게시물 관리', undefined, [
+                  {
+                    text: '삭제',
+                    style: 'destructive',
+                    onPress: () =>
+                      Alert.alert('게시물 삭제', '이 게시물을 삭제할까요?', [
+                        { text: '취소', style: 'cancel' },
+                        {
+                          text: '삭제',
+                          style: 'destructive',
+                          onPress: () => onDelete(post.id),
+                        },
+                      ]),
+                  },
+                  { text: '취소', style: 'cancel' },
+                ])
+              }
+            >
+              <Ionicons name="ellipsis-horizontal" size={18} color="#1A1108" />
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Images */}
@@ -214,10 +256,11 @@ function PostCard({
           }
         >
           <Ionicons name="chatbubble-outline" size={19} color="#1A1108" />
-          <Text style={card.actionText}>{post.comment_count}</Text>
+          <Text style={card.actionText}>{commentCount}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={card.actionBtn} onPress={() => onShare(post)}>
           <Ionicons name="paper-plane-outline" size={19} color="#1A1108" />
+          {(post.share_count ?? 0) > 0 && <Text style={card.actionText}>{post.share_count}</Text>}
         </TouchableOpacity>
 
         <View style={card.actionsRight}>
@@ -248,6 +291,24 @@ export default function FeedScreen() {
   const [posts, setPosts] = useState<FirestorePost[]>([]);
   const [sharePost, setSharePost] = useState<FirestorePost | null>(null);
   const uid = useAuthStore((s) => s.user?.uid ?? (s.kakaoUser ? `kakao_${s.kakaoUser.id}` : null));
+
+  // 지도에서 장소를 선택한 경우 해당 장소명으로 자동 검색
+  const feedSearchQuery    = useMapStore((s) => s.feedSearchQuery);
+  const setFeedSearchQuery = useMapStore((s) => s.setFeedSearchQuery);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (feedSearchQuery) {
+        setSearchText(feedSearchQuery);
+        setFeedSearchQuery(null);
+      }
+    }, [feedSearchQuery, setFeedSearchQuery])
+  );
+
+  const handleDelete = async (postId: string) => {
+    if (!uid) return;
+    await deletePost(postId, uid).catch(() => {});
+  };
 
   useEffect(() => {
     const unsub = subscribeFeedPosts(setPosts);
@@ -290,7 +351,7 @@ export default function FeedScreen() {
       >
         {hasPosts ? (
           filtered.length > 0
-            ? filtered.map((post) => <PostCard key={post.id} post={post} onShare={setSharePost} />)
+            ? filtered.map((post) => <PostCard key={post.id} post={post} onShare={setSharePost} onDelete={handleDelete} />)
             : (
               <View style={styles.noResult}>
                 <Ionicons name="search" size={36} color="#1A1108" />
@@ -334,6 +395,7 @@ export default function FeedScreen() {
           ? `[게시물 공유] ${sharePost.author_nickname}의 게시물\n"${sharePost.content.slice(0, 80)}${sharePost.content.length > 80 ? '...' : ''}"`
           : ''}
         onClose={() => setSharePost(null)}
+        onShare={() => sharePost && incrementShareCount(sharePost.id)}
       />
     </View>
   );

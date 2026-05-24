@@ -3,7 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { getPersistedKakaoSession } from '../src/api/kakaoAuth';
 import { auth, db } from '../src/firebaseConfig';
 import { useAuthStore } from '../src/store/authStore';
@@ -15,6 +15,7 @@ export default function RootLayout() {
   const setUser           = useAuthStore((s) => s.setUser);
   const setKakaoUser      = useAuthStore((s) => s.setKakaoUser);
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
+  const setNickname       = useAuthStore((s) => s.setNickname);
   const isLoggedIn        = useAuthStore((s) => s.isLoggedIn);
   const firebaseUser      = useAuthStore((s) => s.user);
   const kakaoUser         = useAuthStore((s) => s.kakaoUser);
@@ -52,8 +53,15 @@ export default function RootLayout() {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
+    // fetch 중에는 isReady = false 유지 → 가드 조기 실행 방지
+    setProfileComplete(null);
+
     getDoc(doc(db, 'users', uid))
-      .then((snap) => setProfileComplete(snap.data()?.profile_complete ?? false))
+      .then((snap) => {
+        const data = snap.data();
+        setProfileComplete(data?.profile_complete ?? false);
+        setNickname(data?.nickname ?? null);
+      })
       .catch(() => setProfileComplete(false));
   }, [firebaseUser, kakaoUser]);
 
@@ -63,6 +71,7 @@ export default function RootLayout() {
   // 3. 네비게이션 가드
   useEffect(() => {
     if (!isReady) return;
+    if (!segments.length) return; // Stack 아직 미마운트
 
     const seg            = segments[0] as string;
     const inTabs         = seg === '(tabs)';
@@ -83,20 +92,31 @@ export default function RootLayout() {
     }
   }, [isReady, firebaseUser, kakaoUser, profileComplete, segments]);
 
-  if (!isReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF' }}>
-        <ActivityIndicator size="large" color="#FFAC30" />
-      </View>
-    );
-  }
-
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login"         options={{ headerShown: false }} />
-      <Stack.Screen name="signup"        options={{ headerShown: false }} />
-      <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)"        options={{ headerShown: false }} />
-    </Stack>
+    <View style={styles.root}>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="login"         options={{ headerShown: false }} />
+        <Stack.Screen name="signup"        options={{ headerShown: false }} />
+        <Stack.Screen name="profile-setup" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)"        options={{ headerShown: false }} />
+      </Stack>
+
+      {/* 로딩 오버레이 — Stack은 항상 마운트되어 있어야 navigate 가능 */}
+      {!isReady && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color="#FFAC30" />
+        </View>
+      )}
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

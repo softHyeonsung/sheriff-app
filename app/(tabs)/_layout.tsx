@@ -1,7 +1,7 @@
 ﻿// 경로: app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { subscribeToRooms } from '../../src/api/chat';
 import { savePinToFirestore, unsavePinFromFirestore } from '../../src/api/savedPlaces';
 import { loadSavedPosts } from '../../src/api/savedPosts';
 import { useAuthStore } from '../../src/store/authStore';
@@ -43,17 +44,34 @@ const TAB_LABELS: Record<string, string> = {
 const PIN_COLORS: Record<MapPin['type'], string> = {
   gathering: '#FFAC30',
   saved:     '#4CAF6A',
+  post:      '#5B82DB',
 };
 
 const PIN_LABELS: Record<MapPin['type'], string> = {
   gathering: '모임',
   saved:     '저장',
+  post:      '게시물',
 };
 
 // ── Floating tab bar ───────────────────────────────────────────────────────────
 
 function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const firebaseUser = useAuthStore((s) => s.user);
+  const kakaoUser    = useAuthStore((s) => s.kakaoUser);
+  const myUid        = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!myUid) return;
+    return subscribeToRooms(myUid, (rooms) => {
+      const total = rooms.reduce(
+        (sum, room) => sum + (room.unread_counts?.[myUid] ?? 0),
+        0,
+      );
+      setUnreadCount(total);
+    });
+  }, [myUid]);
 
   return (
     <View style={[styles.tabBarOuter, { bottom: insets.bottom + 8 }]}>
@@ -83,11 +101,20 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
               accessibilityState={{ selected: isFocused }}
               accessibilityLabel={TAB_LABELS[route.name]}
             >
-              <Ionicons
-                name={isFocused ? icons?.focused : icons?.unfocused}
-                size={24}
-                color={isFocused ? '#FFAC30' : '#8A6030'}
-              />
+              <View style={styles.iconWrap}>
+                <Ionicons
+                  name={isFocused ? icons?.focused : icons?.unfocused}
+                  size={24}
+                  color={isFocused ? '#FFAC30' : '#8A6030'}
+                />
+                {route.name === 'chat' && unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 99 ? '99+' : String(unreadCount)}
+                    </Text>
+                  </View>
+                )}
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -101,6 +128,8 @@ function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
 function MapOverlaySheets() {
   const insets = useSafeAreaInsets();
 
+  const router = useRouter();
+
   const {
     placeResults,
     selectedPlace,
@@ -109,12 +138,19 @@ function MapOverlaySheets() {
     _sendToMap,
     setSelectedPlace,
     setShowResults,
+    setFeedSearchQuery,
     clearPlaces,
     hideCard,
     savedPlaces,
     savePlace,
     unsavePlace,
   } = useMapStore();
+
+  const goToFeedWithQuery = React.useCallback((query: string) => {
+    setFeedSearchQuery(query);
+    hideCard();
+    router.push('/(tabs)/feed');
+  }, [setFeedSearchQuery, hideCard, router]);
 
   const firebaseUser = useAuthStore((s) => s.user);
   const kakaoUser    = useAuthStore((s) => s.kakaoUser);
@@ -285,24 +321,50 @@ function MapOverlaySheets() {
                   <Text style={styles.detailSubtitle}>{selectedPin.subtitle}</Text>
                 )}
                 <View style={styles.detailActions}>
-                  {selectedPin.type === 'saved' ? (
+                  {selectedPin.type === 'gathering' ? (
                     <TouchableOpacity
-                      style={[styles.detailPrimaryBtn, { backgroundColor: '#E05252' }]}
-                      onPress={() => { handleUnsavePlace(selectedPin.id); hideCard(); }}
+                      style={[styles.detailPrimaryBtn, { flex: 1 }]}
+                      onPress={() => { hideCard(); router.push(`/gathering/${selectedPin.id}` as any); }}
                       activeOpacity={0.85}
                     >
-                      <Ionicons name="bookmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={[styles.detailPrimaryBtnText, { color: '#FFFFFF' }]}>저장 취소</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity style={styles.detailPrimaryBtn} onPress={hideCard} activeOpacity={0.85}>
                       <Ionicons name="arrow-forward-circle" size={18} color="#1A1108" style={{ marginRight: 6 }} />
-                      <Text style={styles.detailPrimaryBtnText}>자세히 보기</Text>
+                      <Text style={styles.detailPrimaryBtnText}>모임 보러가기</Text>
                     </TouchableOpacity>
+                  ) : selectedPin.type === 'saved' ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.detailPrimaryBtn, { backgroundColor: '#E05252' }]}
+                        onPress={() => { handleUnsavePlace(selectedPin.id); hideCard(); }}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="bookmark" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={[styles.detailPrimaryBtnText, { color: '#FFFFFF' }]}>저장 취소</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.detailViewPostsBtn}
+                        onPress={() => goToFeedWithQuery(selectedPin.title)}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="chatbox-outline" size={16} color="#1A1108" style={{ marginRight: 5 }} />
+                        <Text style={styles.detailViewPostsBtnText}>게시물 보기</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <TouchableOpacity style={styles.detailPrimaryBtn} onPress={hideCard} activeOpacity={0.85}>
+                        <Ionicons name="arrow-forward-circle" size={18} color="#1A1108" style={{ marginRight: 6 }} />
+                        <Text style={styles.detailPrimaryBtnText}>자세히 보기</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.detailViewPostsBtn}
+                        onPress={() => goToFeedWithQuery(selectedPin.title)}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="chatbox-outline" size={16} color="#1A1108" style={{ marginRight: 5 }} />
+                        <Text style={styles.detailViewPostsBtnText}>게시물 보기</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
-                  <TouchableOpacity style={styles.detailSecondaryBtn} onPress={hideCard} activeOpacity={0.7}>
-                    <Text style={styles.detailSecondaryBtnText}>닫기</Text>
-                  </TouchableOpacity>
                 </View>
               </>
             )}
@@ -351,8 +413,13 @@ function MapOverlaySheets() {
                     />
                     <Text style={styles.detailPrimaryBtnText}>{isSaved ? '저장됨' : '저장하기'}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.detailSecondaryBtn} onPress={hideCard} activeOpacity={0.7}>
-                    <Text style={styles.detailSecondaryBtnText}>닫기</Text>
+                  <TouchableOpacity
+                    style={styles.detailViewPostsBtn}
+                    onPress={() => goToFeedWithQuery(selectedPlace.place_name)}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="chatbox-outline" size={16} color="#1A1108" style={{ marginRight: 5 }} />
+                    <Text style={styles.detailViewPostsBtnText}>게시물 보기</Text>
                   </TouchableOpacity>
                 </View>
               </>
@@ -457,6 +524,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 44,
+  },
+  iconWrap: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -7,
+    backgroundColor: '#E05252',
+    borderRadius: 9999,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    fontSize: 9,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#FFFFFF',
   },
 
   // Sheet wrapper — fills screen, touches pass through transparent area
@@ -629,6 +718,22 @@ const styles = StyleSheet.create({
   detailSecondaryBtnText: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Medium',
+    color: '#1A1108',
+  },
+  detailViewPostsBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingVertical: 13,
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+    backgroundColor: '#FFFFFF',
+  },
+  detailViewPostsBtnText: {
+    fontSize: 14,
+    fontFamily: 'AppleSDGothicNeo-Bold',
     color: '#1A1108',
   },
 });

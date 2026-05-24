@@ -4,10 +4,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
-  Platform,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,8 +26,10 @@ import {
   FirestoreComment,
   FirestorePost,
   addComment,
+  deletePost,
   fetchPostById,
   formatTimeAgo,
+  incrementShareCount,
   subscribeComments,
   toggleLike as toggleLikeFS,
 } from '../../src/api/posts';
@@ -62,6 +66,8 @@ export default function PostDetailScreen() {
   const [submitting,  setSubmitting]  = useState(false);
   const [myFollowing, setMyFollowing] = useState<string[]>([]);
   const [showShare, setShowShare] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [localShareCount, setLocalShareCount] = useState<number | null>(null);
   const { width: screenWidth } = useWindowDimensions();
   const [imgIndex, setImgIndex] = useState(0);
 
@@ -133,8 +139,9 @@ export default function PostDetailScreen() {
     );
   }
 
-  const liked     = uid ? post.likes.includes(uid) : false;
-  const likeCount = post.likes.length;
+  const liked      = uid ? post.likes.includes(uid) : false;
+  const likeCount  = post.likes.length;
+  const shareCount = localShareCount ?? post.share_count ?? 0;
   const bookmarked = savedPostIds.includes(post.id);
   const isSaved    = post.location_pin
     ? savedPlaces.some((p) => p.id === post.location_pin!.id)
@@ -144,9 +151,38 @@ export default function PostDetailScreen() {
 
   const handleToggleLike = async () => {
     if (!uid) return;
-    await toggleLikeFS(post.id, uid, liked).catch(() => {});
-    // Refresh post to get updated likes
-    fetchPostById(post.id).then(setPost).catch(() => {});
+    setPost((prev) => {
+      if (!prev) return prev;
+      const newLikes = liked
+        ? prev.likes.filter((l) => l !== uid)
+        : [...prev.likes, uid];
+      return { ...prev, likes: newLikes };
+    });
+    await toggleLikeFS(post.id, uid, liked).catch(() => {
+      fetchPostById(post.id).then(setPost).catch(() => {});
+    });
+  };
+
+  const handleShare = () => {
+    setLocalShareCount((prev) => (prev ?? shareCount) + 1);
+    incrementShareCount(post.id);
+  };
+
+  const isMyPost = uid === post?.author_id;
+
+  const handleDeletePost = () => {
+    setShowMenu(false);
+    Alert.alert('게시물 삭제', '이 게시물을 삭제할까요?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: async () => {
+          await deletePost(post!.id, uid!).catch(() => {});
+          router.back();
+        },
+      },
+    ]);
   };
 
   const toggleBookmark = async () => {
@@ -210,7 +246,24 @@ export default function PostDetailScreen() {
         onClose={() => setShowShare(false)}
         myUid={uid ?? ''}
         shareText={postShareText}
+        onShare={handleShare}
       />
+
+      {/* 3-dot 삭제 메뉴 */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <Pressable style={menuStyles.backdrop} onPress={() => setShowMenu(false)}>
+          <View style={menuStyles.sheet}>
+            <TouchableOpacity style={menuStyles.item} onPress={handleDeletePost} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={20} color="#E05252" />
+              <Text style={menuStyles.itemDanger}>삭제하기</Text>
+            </TouchableOpacity>
+            <View style={menuStyles.sep} />
+            <TouchableOpacity style={menuStyles.item} onPress={() => setShowMenu(false)} activeOpacity={0.7}>
+              <Text style={menuStyles.itemCancel}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
@@ -224,16 +277,16 @@ export default function PostDetailScreen() {
         <Text style={styles.headerTitle}>게시물</Text>
         <TouchableOpacity
           style={styles.headerIconBtn}
-          onPress={() => setShowShare(true)}
+          onPress={() => isMyPost ? setShowMenu(true) : setShowShare(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="share-outline" size={24} color="#1A1108" />
+          <Ionicons name={isMyPost ? 'ellipsis-vertical' : 'share-outline'} size={24} color="#1A1108" />
         </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
         style={styles.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false}>
           {/* Hero image carousel */}
@@ -276,12 +329,19 @@ export default function PostDetailScreen() {
               />
               <Text style={[styles.actionText, liked && styles.actionTextLiked]}>{likeCount}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                commentInputRef.current?.focus();
+                scrollRef.current?.scrollToEnd({ animated: true });
+              }}
+            >
               <Ionicons name="chatbubble-outline" size={21} color="#1A1108" />
               <Text style={styles.actionText}>{comments.length}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => setShowShare(true)}>
               <Ionicons name="paper-plane-outline" size={21} color="#1A1108" />
+              {shareCount > 0 && <Text style={styles.actionText}>{shareCount}</Text>}
             </TouchableOpacity>
             <View style={styles.actionsRight}>
               {post.location_pin && (
@@ -302,10 +362,18 @@ export default function PostDetailScreen() {
           <View style={styles.body} onLayout={(e) => { bodyYRef.current = e.nativeEvent.layout.y; }}>
             {/* Author row */}
             <View style={styles.authorRow}>
-              <View style={[styles.authorAvatar, post.author_is_sheriff && styles.authorAvatarSheriff]}>
-                <Ionicons name="person" size={22} color="#1A1108" />
-              </View>
-              <View style={styles.authorInfo}>
+              <TouchableOpacity
+                onPress={() => router.push({ pathname: '/user/[uid]', params: { uid: post.author_id } })}
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              >
+                <View style={[styles.authorAvatar, post.author_is_sheriff && styles.authorAvatarSheriff]}>
+                  <Ionicons name="person" size={22} color="#1A1108" />
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.authorInfo}
+                onPress={() => router.push({ pathname: '/user/[uid]', params: { uid: post.author_id } })}
+              >
                 <View style={styles.nameRow}>
                   <Text style={styles.authorName}>{post.author_nickname}</Text>
                   {post.author_is_sheriff && (
@@ -316,7 +384,7 @@ export default function PostDetailScreen() {
                   )}
                 </View>
                 <Text style={styles.authorMeta}>{formatTimeAgo(post.timestamp)}</Text>
-              </View>
+              </TouchableOpacity>
               {uid && post && uid !== post.author_id && (
                 <TouchableOpacity
                   style={[styles.followBtn, isFollowingAuthor && styles.followBtnActive]}
@@ -626,4 +694,29 @@ const styles = StyleSheet.create({
     color: '#1A1108',
   },
   sendBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
+});
+
+const menuStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
+  },
+  sep: { height: 1, backgroundColor: '#F5F5F5' },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+  },
+  itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
+  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9E9E9E' },
 });

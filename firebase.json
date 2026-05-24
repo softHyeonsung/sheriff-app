@@ -1,7 +1,15 @@
 {
+  "hosting": {
+    "public": "public",
+    "cleanUrls": true
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "bucket": "sheriff-app-dab41.firebasestorage.app",
+    "rules": "storage.rules"
   },
   "functions": [
     {

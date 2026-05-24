@@ -1,15 +1,18 @@
-import {
+﻿import {
   Timestamp,
   addDoc,
+  arrayRemove,
   collection,
   doc,
   getDoc,
   getDocs,
+  increment,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
@@ -19,6 +22,10 @@ export type Message = {
   sender_id: string;
   text: string;
   timestamp: Timestamp | null;
+  type?: 'map_share';
+  shared_uid?: string;
+  sharer_nickname?: string;
+  pin_count?: number;
 };
 
 export type ChatRoom = {
@@ -27,6 +34,7 @@ export type ChatRoom = {
   members: string[];
   last_message: string;
   last_message_at: Timestamp | null;
+  unread_counts?: Record<string, number>;
 };
 
 export type UserProfile = {
@@ -46,23 +54,40 @@ export const getOrCreateDMRoom = async (myUid: string, otherUid: string): Promis
       members: [myUid, otherUid],
       last_message: '',
       last_message_at: serverTimestamp(),
+      unread_counts: {},
     });
   }
   return roomId;
 };
 
-export const sendMessage = async (roomId: string, senderId: string, text: string): Promise<void> => {
+export const sendMessage = async (
+  roomId: string,
+  senderId: string,
+  text: string,
+  members: string[] = [],
+): Promise<void> => {
   const trimmed = text.trim();
   await addDoc(collection(db, 'chats', roomId, 'messages'), {
     sender_id: senderId,
     text: trimmed,
     timestamp: serverTimestamp(),
   });
-  await setDoc(
-    doc(db, 'chats', roomId),
-    { last_message: trimmed, last_message_at: serverTimestamp() },
-    { merge: true }
-  );
+  const updates: Record<string, unknown> = {
+    last_message: trimmed,
+    last_message_at: serverTimestamp(),
+  };
+  for (const uid of members) {
+    if (uid !== senderId) {
+      updates[`unread_counts.${uid}`] = increment(1);
+    }
+  }
+  await updateDoc(doc(db, 'chats', roomId), updates);
+};
+
+export const markRoomAsRead = async (roomId: string, uid: string): Promise<void> => {
+  await updateDoc(doc(db, 'chats', roomId), {
+    [`unread_counts.${uid}`]: 0,
+  }).catch(() => {});
 };
 
 export const subscribeToMessages = (
@@ -99,6 +124,47 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 };
 
 const HIGH_SUFFIX = '';
+
+export const leaveChatRoom = async (roomId: string, uid: string): Promise<void> => {
+  await updateDoc(doc(db, 'chats', roomId), {
+    members: arrayRemove(uid),
+  });
+};
+
+export const fetchMyRooms = async (uid: string): Promise<ChatRoom[]> => {
+  const q = query(collection(db, 'chats'), where('members', 'array-contains', uid));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => ({ room_id: d.id, ...d.data() } as ChatRoom))
+    .sort((a, b) => (b.last_message_at?.seconds ?? 0) - (a.last_message_at?.seconds ?? 0));
+};
+
+export const sendMapShareMessage = async (
+  roomId: string,
+  senderId: string,
+  sharerNickname: string,
+  pinCount: number,
+  members: string[],
+): Promise<void> => {
+  const preview = `📍 ${sharerNickname}님이 My Own 지도를 공유했어요`;
+  await addDoc(collection(db, 'chats', roomId, 'messages'), {
+    sender_id: senderId,
+    text: preview,
+    type: 'map_share',
+    shared_uid: senderId,
+    sharer_nickname: sharerNickname,
+    pin_count: pinCount,
+    timestamp: serverTimestamp(),
+  });
+  const updates: Record<string, unknown> = {
+    last_message: preview,
+    last_message_at: serverTimestamp(),
+  };
+  for (const uid of members) {
+    if (uid !== senderId) updates[`unread_counts.${uid}`] = increment(1);
+  }
+  await updateDoc(doc(db, 'chats', roomId), updates);
+};
 
 export const searchUsers = async (nickname: string, myUid: string): Promise<UserProfile[]> => {
   if (!nickname.trim()) return [];

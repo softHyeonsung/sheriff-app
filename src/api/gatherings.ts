@@ -3,6 +3,7 @@ import {
   addDoc,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -249,6 +250,33 @@ export async function cancelGathering(
 ): Promise<void> {
   await updateDoc(doc(db, 'gatherings', gatheringId), { status: 'cancelled' });
   await addScore(hostId, -20); // -20 모임 취소 패널티
+}
+
+export async function deleteGathering(gatheringId: string): Promise<void> {
+  const gRef   = doc(db, 'gatherings', gatheringId);
+  const gSnap  = await getDoc(gRef);
+
+  if (gSnap.exists()) {
+    const gData = gSnap.data();
+    if (gData.has_chat_room) {
+      const chatRef  = doc(db, 'chats', gatheringId);
+      const chatSnap = await getDoc(chatRef).catch(() => null);
+      if (chatSnap?.exists()) {
+        const sysText = `'${gData.title}' 모임이 삭제됐어요.`;
+        await addDoc(collection(db, 'chats', gatheringId, 'messages'), {
+          sender_id: 'system',
+          text: sysText,
+          timestamp: serverTimestamp(),
+        }).catch(() => {});
+        await updateDoc(chatRef, {
+          last_message: sysText,
+          last_message_at: serverTimestamp(),
+        }).catch(() => {});
+      }
+    }
+  }
+
+  await deleteDoc(gRef);
 }
 
 export async function openChatRoom(gatheringId: string): Promise<void> {
