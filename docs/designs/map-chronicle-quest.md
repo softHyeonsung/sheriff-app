@@ -45,7 +45,7 @@ Design doc: `~/.gstack/projects/sheriff-app/user-main-design-20260722-165729.md`
 - `app/(tabs)/index.tsx`: `subscribeFeedPosts()` 구독, `makeMarkerSrc`/`makeGatheringMarkerSrc` 패턴, `PIN_COLORS`, `dirLoading` 가드, `kakaoDirectionsFn`/`odsayDirectionsFn`, `DRAW_ROUTE_SEGMENTS`
 - `src/api/posts.ts`: `location_pin` 필드 (장소 고유 식별자)
 - `src/api/tourApi.ts`: `fetchNearbyTourSpots`
-- `app/(tabs)/profile.tsx`: `myPosts` 클라이언트 필터링 패턴 (집계 훅이 그대로 따를 패턴)
+- `app/(tabs)/profile.tsx`: `myPosts` 클라이언트 필터링 패턴 (집계 함수가 그대로 따를 패턴)
 - `app/shared-map/[uid].tsx`: 친구 지도 비교의 기반 화면
 - DESIGN.md: 지도 에러 패턴, 빈 상태 패턴, 지도 핀 접근성 라벨 규칙
 
@@ -55,7 +55,7 @@ Design doc: `~/.gstack/projects/sheriff-app/user-main-design-20260722-165729.md`
 ## Error & Rescue Registry
 | METHOD/CODEPATH | WHAT CAN GO WRONG | EXCEPTION | RESCUED? | RESCUE ACTION | USER SEES |
 |---|---|---|---|---|---|
-| 게시물 집계 훅 (subscribeFeedPosts 재사용) | 네트워크 오류로 구독 실패 | Firestore SDK error | Y (신규 결정) | DESIGN.md 에러 패턴 적용 | "지도를 불러올 수 없어요" + 재시도 버튼 |
+| 게시물 집계 함수 (subscribeFeedPosts 재사용) | 네트워크 오류로 구독 실패 | Firestore SDK error | Y (신규 결정) | DESIGN.md 에러 패턴 적용 | "지도를 불러올 수 없어요" + 재시도 버튼 |
 | 코스 빌더 (kakaoDirectionsFn 체이닝) | Kakao Directions API 타임아웃/오류 | 기존 catch(e) 패턴 재사용 | Y (기존) | Alert.alert | "경로 탐색 중 문제가 발생했어요" (기존 문구 재사용) |
 | 친구 지도 비교 (shared-map 확장) | 상대방 프로필/게시물 로드 실패 | getUserProfile/loadSavedPins 실패 | 기존 코드 처리 그대로 (신규 갭 아님) | 기존 로직 유지 | 기존 처리 그대로 |
 | 등급 계산 | location_pin.id 그룹에 게시물 0건 | N/A | Y | 마커 자체를 렌더링하지 않음 | 핀이 안 보임 (의도된 동작) |
@@ -80,12 +80,12 @@ CRITICAL GAP 없음 — 모든 신규 코드패스가 최소 하나의 대응(�
 [subscribeFeedPosts() — 이미 index.tsx에 존재]
         │
         ▼
-[신규: 클라이언트 그룹핑 훅]
+[신규: 클라이언트 그룹핑 함수 — src/utils/postAggregation.ts]
    author_id별 필터 → location_pin.id별 그룹 → 게시물 수 → 등급 매핑
         │                              │
         ▼                              ▼
 [신규: 마커 렌더러]              [shared-map/[uid].tsx 확장]
- (makeMarkerSrc 패턴 재사용)      (상대방 uid로 훅 재호출)
+ (makeMarkerSrc 패턴 재사용)      (상대방 uid로 함수 재호출)
         │
         ▼
 [지도 "모임" 모드 WebView] ← 기존 PIN_COLORS 파이프라인에 랜드마크 마커 추가
@@ -97,7 +97,7 @@ CRITICAL GAP 없음 — 모든 신규 코드패스가 최소 하나의 대응(�
    kakaoDirectionsFn 체이닝 (기존) → DRAW_ROUTE_SEGMENTS (기존)
 ```
 
-### Data Flow (신규 집계 훅)
+### Data Flow (신규 집계 함수)
 ```
 INPUT(posts state) ──▶ FILTER(author_id) ──▶ GROUP(location_pin.id) ──▶ MAP(count→tier) ──▶ RENDER(marker)
    │                        │                       │                        │                  │
@@ -110,35 +110,55 @@ INPUT(posts state) ──▶ FILTER(author_id) ──▶ GROUP(location_pin.id) 
 ## Stale Diagram Audit
 이 플랜이 건드리는 파일들에 기존 ASCII 다이어그램 없음 (index.tsx, profile.tsx, shared-map/[uid].tsx 모두 다이어그램 주석 없이 작성됨) — 신선도 이슈 없음.
 
+## Engineering Review Addendum (/plan-eng-review, 2026-07-22)
+
+**Architecture:** 집계/그룹핑 함수는 컴포넌트 내부가 아니라 공유 유틸 모듈 `src/utils/postAggregation.ts`(신규)에 둔다 — `index.tsx`와 `shared-map/[uid].tsx` 양쪽에서 import해야 하기 때문. 등급 임계값 상수도 같은 모듈에.
+
+**Test:** 세 순수 함수(그룹핑/등급 계산/코스 빌더) 모두 경계값·분기 테스트 추가 — 등급 함수만이 아니라 전부.
+
+**Outside Voice(엔지니어링 리뷰, Claude 서브에이전트)가 실제 코드 검증 후 발견한 것 4건, 전부 사용자 확인:**
+1. **버그(검증됨):** `shared-map/[uid].tsx:116`의 빈 상태 조건이 `pins.length === 0`(저장 장소만)이라, 친구가 저장 장소는 0개인데 랜드마크용 게시물은 있는 경우 WebView 자체가 안 뜬다 → 조건을 `pins.length === 0 && landmarks.length === 0`(union)으로 수정.
+2. **진입점 불일치(검증됨):** `user/[uid].tsx`(타 유저 프로필)에 지도 관련 버튼이 없다. shared-map으로 가는 유일한 기존 경로는 `dm/[roomId].tsx` 채팅의 "지도 공유" 메시지뿐. → `user/[uid].tsx`에 "지도 보기" 버튼 신규 추가.
+3. **마커 SVG 중복 인정:** `postAggregation.ts`는 수치 로직만 공유하고, 등급별 마커 SVG 문자열은 `buildMapHTML`(index.tsx)과 `buildSharedMapHTML`(shared-map) 양쪽 WebView HTML 문자열 안에 손으로 중복될 수밖에 없음 — 인정하고 그대로 진행.
+4. **중복 구독 허용:** shared-map 확장 시 새 `subscribeFeedPosts()` 구독이 추가되며, 지도 탭과 동시에 마운트되면 같은 전역 구독이 두 화면에서 병행 실행될 수 있음 — 이 앱 규모에서는 문제없다고 판단, 별도 구독 관리자 없이 진행.
+
 ## Implementation Tasks
 - [ ] **T1 (P1)** — 지도 서브뷰 — "모임" 모드 바텀시트 재사용 여부 확인
   - Surfaced by: Section 1/Sequencing (outside voice) — 시퀀싱 역전 발견
   - Files: `app/(tabs)/index.tsx`, `app/(tabs)/_layout.tsx`
   - Verify: 바텀시트 컴포넌트가 조건부 버튼 추가를 지원하는지 코드 확인
-- [ ] **T2 (P1)** — 게시물 집계 훅 작성 (신규 쿼리 없이 기존 구독 재사용)
-  - Surfaced by: Section 1 (아키텍처 리뷰에서 기존 패턴 불일치 발견)
-  - Files: `app/(tabs)/index.tsx`, `src/api/posts.ts`
-  - Verify: 유닛 테스트로 그룹핑 로직 검증
-- [ ] **T3 (P1)** — 등급 임계값 상수 + 마커 SVG 5종 + a11y 라벨
-  - Surfaced by: Section 11 (디자인/접근성 갭)
+- [ ] **T2 (P1)** — `src/utils/postAggregation.ts` 신규 작성 (그룹핑 + 등급 계산 + 코스 빌더, 공유 모듈)
+  - Surfaced by: Eng Review Section 1 (아키텍처 — 공유 위치 필요)
+  - Files: `src/utils/postAggregation.ts` (신규)
+  - Verify: 유닛 테스트로 세 함수 모두 검증 (T7)
+- [ ] **T3 (P1)** — 등급 임계값 상수 + 마커 SVG 5종 + a11y 라벨 (index.tsx)
+  - Surfaced by: CEO Review Section 11 (디자인/접근성 갭)
   - Files: `app/(tabs)/index.tsx`
   - Verify: 5개 등급 마커가 실제 기기에서 렌더링되는지 육안 확인
-- [ ] **T4 (P1)** — 지도 에러 상태 UI 추가 (내 연대기 서브뷰)
-  - Surfaced by: Section 1/2 (에러 경로 누락 발견)
+- [ ] **T4 (P1)** — 지도 에러 상태 UI 추가 (내 연대기 서브뷰, index.tsx)
+  - Surfaced by: CEO Review Section 1/2 (에러 경로 누락 발견)
   - Files: `app/(tabs)/index.tsx`
   - Verify: 네트워크 끄고 재시도 버튼 동작 확인
-- [ ] **T5 (P2)** — 코스 빌더 함수 (nearest-neighbor + 빈칸 채우기)
+- [ ] **T5 (P2)** — 코스 빌더 UI 연결 (nearest-neighbor + 빈칸 채우기, postAggregation.ts 사용)
   - Surfaced by: Open Question 3, CEO Plan 승인된 확장 항목
   - Files: `src/api/tourApi.ts`, `app/(tabs)/index.tsx`
   - Verify: 데모 시나리오로 2~4개 스팟 경로 확인
-- [ ] **T6 (P2)** — shared-map/[uid].tsx 확장 (랜드마크 등급 렌더링)
+- [ ] **T6 (P2)** — shared-map/[uid].tsx 확장 (랜드마크 등급 렌더링 + 새 subscribeFeedPosts 구독)
   - Surfaced by: Outside Voice (기존 화면 재사용 발견)
   - Files: `app/shared-map/[uid].tsx`
-  - Verify: 친구 프로필에서 진입 후 랜드마크 마커 표시 확인
-- [ ] **T7 (P2)** — 등급 계산 순수 함수 분리 + 경계값 테스트
-  - Surfaced by: Section 6 (테스트 커버리지 결정)
-  - Files: 신규 유틸 파일, `__tests__/`
+  - Verify: user/[uid].tsx에서 진입 후 랜드마크 마커 표시 확인
+- [ ] **T7 (P1)** — `postAggregation.ts` 세 함수 전부 경계값/분기 테스트
+  - Surfaced by: Eng Review Section 3 (테스트 리뷰 — 그룹핑/코스 빌더도 커버 확정)
+  - Files: `__tests__/postAggregation.test.ts` (신규)
   - Verify: `npm test` 통과
+- [ ] **T8 (P1)** — shared-map 빈 상태 조건 버그 수정 (union 체크)
+  - Surfaced by: Eng Review Outside Voice — 검증된 버그 (`shared-map/[uid].tsx:116`)
+  - Files: `app/shared-map/[uid].tsx`
+  - Verify: 저장 장소 0개 + 랜드마크 게시물 있는 계정으로 진입해 지도가 뜨는지 확인
+- [ ] **T9 (P2)** — user/[uid].tsx에 "지도 보기" 진입점 버튼 추가
+  - Surfaced by: Eng Review Outside Voice — 검증된 네비게이션 갭
+  - Files: `app/user/[uid].tsx`
+  - Verify: 타 유저 프로필에서 버튼 탭 → shared-map/[uid] 이동 확인
 
 ## Completion Summary
 ```
@@ -175,7 +195,42 @@ INPUT(posts state) ──▶ FILTER(author_id) ──▶ GROUP(location_pin.id) 
 +====================================================================+
 ```
 
-### Unresolved Decisions
+### Unresolved Decisions (CEO Review)
+없음 — 모든 AskUserQuestion에 응답 완료.
+
+## Engineering Review Completion Summary
+```
++====================================================================+
+|                  ENG REVIEW — COMPLETION SUMMARY                    |
++====================================================================+
+| Step 0: Scope Challenge  | 통과 — 8파일/2서비스 임계값 미달, 축소 불필요 |
+| Architecture Review      | 1 issue found (집계 로직 공유 위치)         |
+| Code Quality Review      | 0 issues (DRY 우려는 아키텍처 수정으로 해소) |
+| Test Review              | 2 gaps found → 그룹핑/코스빌더 테스트 추가 확정 |
+| Performance Review       | 0 issues (순차 경로 체이닝은 구조적으로 필요) |
+| NOT in scope             | written (CEO 리뷰 섹션과 동일)               |
+| What already exists      | written (CEO 리뷰 섹션과 동일)               |
+| TODOS.md updates         | 0 new (기존 3건 유지, 신규 없음)             |
+| Failure modes            | 2 critical gaps flagged → 모두 T8/공유 유틸로 수정 |
+| Outside voice            | ran (Claude subagent, Codex 미설치) — 4개 텐션 발견/해결, 실제 코드로 검증(shared-map:116, user/[uid].tsx 진입점 부재) |
+| Parallelization          | 3 lanes, 2 parallel + 1 sequential prerequisite |
+| Lake Score                | 6/6 추천에서 완전판 선택                     |
++====================================================================+
+```
+
+### Worktree Parallelization Strategy
+
+| Step | Modules touched | Depends on |
+|------|-----------------|------------|
+| T2: postAggregation.ts 작성 + T7 테스트 | `src/utils/` | — |
+| T1, T3, T4, T5: index.tsx 변경 (바텀시트 확인, 마커, 에러 UI, 코스 UI) | `app/(tabs)/` | T2 |
+| T6, T8, T9: shared-map 확장 + 버그 수정 + user/[uid].tsx 진입점 | `app/shared-map/`, `app/user/` | T2 |
+
+**Execution order:** T2(+T7)를 먼저 순차 실행(선행 필수 — 다른 모든 작업이 이 모듈을 import). 완료 후 `app/(tabs)/` 라인과 `app/shared-map/`+`app/user/` 라인은 서로 다른 모듈이라 병렬 워크트리로 동시 진행 가능.
+
+`Lane A: T2 → T7 (sequential, 선행)` / `Lane B: T1 → T3 → T4 → T5 (sequential, app/(tabs)/ 공유)` / `Lane C: T6 → T8 → T9 (sequential, shared-map/user 공유)`. Lane B와 Lane C는 서로 다른 디렉토리라 충돌 없이 병렬 실행 가능 — Lane A 완료 후 B+C를 병렬 워크트리로 launch.
+
+### Unresolved Decisions (Eng Review)
 없음 — 모든 AskUserQuestion에 응답 완료.
 
 ## Deferred to TODOS.md
