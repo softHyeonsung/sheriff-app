@@ -52,3 +52,30 @@ or simply remove them from the UI until the credentials are configured.
 ### Extract email/password validation helper
 ~~**What:** `handleLogin` and `handleSignUp` in `login.tsx` had duplicated validation logic.~~
 ~~**Status:** DONE — extracted to `validateEmailPassword()` during CEO review (2026-04-03)~~
+
+---
+
+Items deferred from /plan-ceo-review on 2026-07-22 (동네 연대기 — 지도 성장 + 여행 코스 추천).
+
+## P3 — Deferred expansions (map-chronicle-quest)
+
+### 등급업 셀레브레이션 애니메이션
+**What:** 지도 마커가 flag→이정표→집→호텔→빌딩으로 등급이 오를 때, 기존 보안관 뱃지 어워드 스펙(스케일 0.8→1.1→1.0 + 골드 글로우 펄스, 800ms)을 재사용한 축하 애니메이션.
+**Why:** 데모 임팩트가 크지만 이번 라운드는 핵심 집계/코스 기능이 우선이라 미룸.
+**Effort:** S
+**Depends on:** map-chronicle-quest 핵심 기능(등급 계산, 마커 렌더링) 완료 후
+
+### 동네 스카이라인 공유 이미지
+**What:** 수집한 랜드마크들을 하나의 스카이라인 이미지로 렌더링해 공유하는 기능.
+**Why:** 소셜 자랑 요소로 좋지만 렌더링 품질 리스크가 있어 코어 기능 검증 후 진행.
+**Effort:** M
+**Depends on:** map-chronicle-quest 핵심 기능 완료 후
+
+### 친구 지도 동시 비교 뷰
+**What:** 현재는 `shared-map/[uid].tsx`를 확장해 상대방 지도 화면 하나만 보여준다. 나와 상대방의 랜드마크 지도를 한 화면에서 동시에(나란히 또는 오버레이) 비교하는 뷰는 사용자가 명시적으로 이번 라운드에서 제외하고 후속 작업으로 남김.
+**Why:** 공모전 데드라인(2026-09-21) 안에서는 단일 화면 확장이 더 현실적이고, 동시 비교는 레이아웃/인터랙션 설계가 별도로 필요.
+**Effort:** M
+**Depends on:** 친구 지도 비교(shared-map 확장) 완료 후
+
+**Ref:** `~/.gstack/projects/sheriff-app/ceo-plans/2026-07-22-map-chronicle-quest.md`
+**공모전 제출일:** 2026-09-21 (CLAUDE.md의 1차 마감 5/25는 이미 지난 날짜이므로 참고 시 주의)
