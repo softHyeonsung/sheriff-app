@@ -122,7 +122,8 @@ export async function createPost(params: {
 }
 
 export function subscribeFeedPosts(
-  callback: (posts: FirestorePost[]) => void
+  callback: (posts: FirestorePost[]) => void,
+  onError?: (error: Error) => void,
 ): () => void {
   const q = query(collection(db, 'posts'), orderBy('timestamp', 'desc'));
   return onSnapshot(q, (snap) => {
@@ -146,7 +147,10 @@ export function subscribeFeedPosts(
       };
     });
     callback(posts);
-  }, () => callback([]));
+  }, (error) => {
+    callback([]);
+    onError?.(error);
+  });
 }
 
 export async function fetchPostById(postId: string): Promise<FirestorePost | null> {

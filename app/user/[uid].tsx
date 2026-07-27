@@ -153,17 +153,27 @@ export default function UserProfileScreen() {
           )}
         </View>
 
-        {/* Follow button */}
+        {/* Follow + 지도 보기 */}
         {myUid && myUid !== targetUid && (
-          <View style={s.followWrap}>
+          <View style={[s.followWrap, s.actionRow]}>
             <TouchableOpacity
-              style={[s.followBtn, following && s.followingBtn]}
+              style={[s.followBtn, following && s.followingBtn, s.actionBtnFlex]}
               onPress={handleFollow}
               activeOpacity={0.8}
+              accessibilityLabel={following ? '팔로우 취소' : '팔로우'}
             >
               <Text style={[s.followBtnText, following && s.followingBtnText]}>
                 {following ? '팔로잉' : '팔로우'}
               </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.mapBtn, s.actionBtnFlex]}
+              onPress={() => router.push(`/shared-map/${targetUid}` as any)}
+              activeOpacity={0.8}
+              accessibilityLabel={`${profile.nickname}님의 지도 보기`}
+            >
+              <Ionicons name="map-outline" size={16} color="#1A1108" style={{ marginRight: 6 }} />
+              <Text style={s.mapBtnText}>지도 보기</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -188,7 +198,7 @@ export default function UserProfileScreen() {
             <Ionicons
               name="grid-outline"
               size={20}
-              color={activeTab === 'posts' ? '#1A1108' : '#9A9A9A'}
+              color={activeTab === 'posts' ? '#1A1108' : '#7A5C38'}
             />
           </TouchableOpacity>
           <TouchableOpacity
@@ -198,7 +208,7 @@ export default function UserProfileScreen() {
             <Ionicons
               name="ribbon-outline"
               size={20}
-              color={activeTab === 'badges' ? '#1A1108' : '#9A9A9A'}
+              color={activeTab === 'badges' ? '#1A1108' : '#7A5C38'}
             />
           </TouchableOpacity>
         </View>
@@ -301,7 +311,7 @@ const s = StyleSheet.create({
   statsRow: { flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
   statItem: { alignItems: 'center', gap: 2 },
   statNum: { fontSize: 18, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
-  statLabel: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9A9A9A' },
+  statLabel: { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 
   nicknameRow: {
     flexDirection: 'row',
@@ -314,6 +324,8 @@ const s = StyleSheet.create({
   sheriffBadge: { width: 60, height: 20, resizeMode: 'contain' },
 
   followWrap: { paddingHorizontal: 20, marginBottom: 12 },
+  actionRow: { flexDirection: 'row', gap: 10 },
+  actionBtnFlex: { flex: 1 },
   followBtn: {
     height: 36,
     borderRadius: 10,
@@ -323,7 +335,18 @@ const s = StyleSheet.create({
   },
   followingBtn: { backgroundColor: '#F5F5F5', borderWidth: 1, borderColor: '#D4D4D4' },
   followBtnText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
-  followingBtnText: { color: '#9A9A9A', fontFamily: 'AppleSDGothicNeo-Regular' },
+  followingBtnText: { color: '#7A5C38', fontFamily: 'AppleSDGothicNeo-Regular' },
+  mapBtn: {
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4D4D4',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mapBtnText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
 
   scoreRow: {
     flexDirection: 'row',
@@ -359,7 +382,7 @@ const s = StyleSheet.create({
   gridText: { fontSize: 11, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108' },
 
   emptyPosts: { alignItems: 'center', paddingVertical: 48, gap: 12 },
-  emptyText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9A9A9A' },
+  emptyText: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 
   badgeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 16 },
   badgeChip: {

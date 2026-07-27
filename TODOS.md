@@ -79,3 +79,43 @@ Items deferred from /plan-ceo-review on 2026-07-22 (동네 연대기 — 지도 
 
 **Ref:** `~/.gstack/projects/sheriff-app/ceo-plans/2026-07-22-map-chronicle-quest.md`
 **공모전 제출일:** 2026-09-21 (CLAUDE.md의 1차 마감 5/25는 이미 지난 날짜이므로 참고 시 주의)
+
+---
+
+Items found by /review on 2026-07-27 while reviewing map-chronicle-quest — all pre-existing, out of scope for that feature.
+
+## P1 — Cloud Functions 과금/DoS 노출
+
+### kakaoDirections/odsayDirections에 App Check·rate limit 없음
+**What:** `functions/src/index.ts`의 두 Cloud Function은 `request.auth != null`만 확인하고 App Check나 유저당 호출 제한이 없다.
+**Why:** 카카오 로그인 계정만 있으면(만들기 쉬움) 앱 UI를 거치지 않고 함수를 직접 반복 호출해 Kakao Mobility/ODSay API 과금을 무한정 늘릴 수 있다. 이번에 추가한 코스 추천 기능은 탭 1번에 최대 4번 체이닝 호출하므로 노출을 더 키운다.
+**How:** Firebase App Check 추가 + uid별 rate limit(Firestore 카운터 또는 Cloud Functions rate-limit extension).
+**Effort:** M (human: ~4h / CC: ~30min)
+**File:** `functions/src/index.ts`
+
+## P1 — 하드코딩된 Kakao REST API 키 노출
+
+### create-post.tsx/create-gathering.tsx에 API 키가 소스에 하드코딩됨
+**What:** `KAKAO_REST_KEY`가 `create-post.tsx`/`create-gathering.tsx`에는 여전히 `?? '6d840fb987f5a8ffac05946ef5e9b00c'` 폴백으로 하드코딩돼 있다. `index.tsx`는 이미 `?? ''`로 제거됐는데 나머지 두 파일만 남아 불일치.
+**Why:** 실제 키가 git 히스토리에 그대로 노출되어 있고, 세 파일이 서로 다른 동작을 한다(env var 없는 빌드에서 index.tsx만 조용히 검색 실패).
+**How:** 세 파일 모두 `?? ''`로 통일하고, 필요하면 키를 하나의 공유 상수 모듈로 옮겨 재발 방지. 노출된 키는 Kakao 개발자 콘솔에서 재발급 고려.
+**Effort:** S (human: ~30min / CC: ~10min)
+**File:** `app/create-post.tsx`, `app/create-gathering.tsx`
+
+## P2 — 전역 posts 구독 스케일 문제
+
+### 여러 화면이 필터 없이 전체 posts 컬렉션을 구독
+**What:** `shared-map/[uid].tsx`, `index.tsx`, `profile.tsx`, `user/[uid].tsx`가 전부 `subscribeFeedPosts()`로 전체 posts를 구독한 뒤 클라이언트에서 `author_id`로 필터링한다. `where` 절 없음.
+**Why:** 게시물 수가 늘어날수록 화면 하나 열 때마다 전체 컬렉션을 내려받는 비용이 커진다. 이번 랜드마크 기능은 기존 패턴을 그대로 재사용했을 뿐, 새로 만든 문제는 아님.
+**How:** `subscribeFeedPosts`에 선택적 `where('author_id','==',uid)` 파라미터 추가하고 화면별로 점진 전환.
+**Effort:** M (human: ~1일 / CC: ~1시간)
+**File:** `src/api/posts.ts` + 4개 소비 화면
+
+## P2 — 길찾기 stale-response 레이스
+
+### searchRoute의 dirSearchCancelled가 단일 boolean이라 경쟁 상태 발생
+**What:** `app/(tabs)/index.tsx`의 `dirSearchCancelled`는 공유 boolean이라, 모달을 닫았다 빠르게 다시 열고 검색하면 새 요청이 `false`로 리셋한 뒤 먼저 보낸(오래된) 요청의 응답이 화면을 덮어쓸 수 있다.
+**Why:** 사용자가 목적지를 바꿔가며 빠르게 검색할 때 잘못된 경로가 그려질 수 있음.
+**How:** boolean 대신 요청마다 증가하는 세대 토큰(`requestId.current++`)으로 교체, 응답 시점에 비교.
+**Effort:** S (human: ~1h / CC: ~10min)
+**File:** `app/(tabs)/index.tsx` (searchRoute 함수)

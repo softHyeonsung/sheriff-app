@@ -7,12 +7,14 @@ import { create } from 'zustand';
 
 export interface MapPin {
   id: string;
-  type: 'gathering' | 'saved' | 'post';
+  type: 'gathering' | 'saved' | 'post' | 'landmark';
   lat: number;
   lng: number;
   title: string;
   subtitle?: string;
   flash?: boolean;
+  tier?: import('../utils/postAggregation').LandmarkTier; // 'landmark' 타입에서만 사용
+  count?: number; // 'landmark' 타입에서만 사용 — 방문(게시물) 횟수
 }
 
 export interface PlaceResult {
@@ -39,6 +41,11 @@ interface MapOverlayState {
 
   // Registered by the map screen so the overlay can send WebView commands
   _sendToMap: ((msg: object) => void) | null;
+  // Registered by the map screen so the "코스 추천" bottom sheet button (rendered in
+  // _layout.tsx) can trigger the course builder, which needs index.tsx's local
+  // state (userLoc, landmarkPins) — same pattern as _sendToMap/registerSend.
+  _buildCourse:  ((landmarkPinId: string) => void) | null;
+  courseLoading: boolean;
 
   // Actions
   setPlaceResults:    (r: PlaceResult[])          => void;
@@ -48,6 +55,8 @@ interface MapOverlayState {
   setActiveCategory:  (v: string | null)           => void;
   setFeedSearchQuery: (q: string | null)           => void;
   registerSend:       (fn: (msg: object) => void)  => void;
+  registerBuildCourse: (fn: (landmarkPinId: string) => void) => void;
+  setCourseLoading:   (v: boolean)                 => void;
   clearPlaces:        ()                           => void;
   hideCard:           ()                           => void;
   savePlace:          (place: PlaceResult)         => void;
@@ -64,6 +73,8 @@ export const useMapStore = create<MapOverlayState>((set) => ({
   savedPlaces:     [], // TODO: persist via zustand-persist + AsyncStorage (Firestore sync: MAP-03)
   feedSearchQuery: null,
   _sendToMap:      null,
+  _buildCourse:    null,
+  courseLoading:   false,
 
   setPlaceResults:    (placeResults)    => set({ placeResults }),
   setSelectedPlace:   (selectedPlace)   => set({ selectedPlace, selectedPin: null }),
@@ -72,6 +83,8 @@ export const useMapStore = create<MapOverlayState>((set) => ({
   setActiveCategory:  (activeCategory)  => set({ activeCategory }),
   setFeedSearchQuery: (feedSearchQuery) => set({ feedSearchQuery }),
   registerSend:       (fn)              => set({ _sendToMap: fn }),
+  registerBuildCourse: (fn)             => set({ _buildCourse: fn }),
+  setCourseLoading:   (courseLoading)   => set({ courseLoading }),
 
   clearPlaces: () => set({
     placeResults:   [],

@@ -1,9 +1,10 @@
-﻿// 경로: app/(tabs)/_layout.tsx
+// 경로: app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   FlatList,
   StyleSheet,
@@ -45,12 +46,14 @@ const PIN_COLORS: Record<MapPin['type'], string> = {
   gathering: '#FFAC30',
   saved:     '#4CAF6A',
   post:      '#5B82DB',
+  landmark:  '#FFAC30',
 };
 
 const PIN_LABELS: Record<MapPin['type'], string> = {
   gathering: '모임',
   saved:     '저장',
   post:      '게시물',
+  landmark:  '연대기',
 };
 
 // ── Floating tab bar ───────────────────────────────────────────────────────────
@@ -136,6 +139,8 @@ function MapOverlaySheets() {
     selectedPin,
     showResults,
     _sendToMap,
+    _buildCourse,
+    courseLoading,
     setSelectedPlace,
     setShowResults,
     setFeedSearchQuery,
@@ -321,7 +326,35 @@ function MapOverlaySheets() {
                   <Text style={styles.detailSubtitle}>{selectedPin.subtitle}</Text>
                 )}
                 <View style={styles.detailActions}>
-                  {selectedPin.type === 'gathering' ? (
+                  {selectedPin.type === 'landmark' ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.detailPrimaryBtn, { flex: 1 }]}
+                        onPress={() => _buildCourse?.(selectedPin.id)}
+                        activeOpacity={0.85}
+                        disabled={courseLoading}
+                        accessibilityLabel="이 장소부터 코스 추천 받기"
+                      >
+                        {courseLoading ? (
+                          <ActivityIndicator size="small" color="#1A1108" />
+                        ) : (
+                          <>
+                            <Ionicons name="navigate" size={18} color="#1A1108" style={{ marginRight: 6 }} />
+                            <Text style={styles.detailPrimaryBtnText}>코스 추천</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.detailViewPostsBtn}
+                        onPress={() => goToFeedWithQuery(selectedPin.title)}
+                        activeOpacity={0.85}
+                        accessibilityLabel="이 장소 연대기 보기"
+                      >
+                        <Ionicons name="chatbox-outline" size={16} color="#1A1108" style={{ marginRight: 5 }} />
+                        <Text style={styles.detailViewPostsBtnText}>연대기 보기</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : selectedPin.type === 'gathering' ? (
                     <TouchableOpacity
                       style={[styles.detailPrimaryBtn, { flex: 1 }]}
                       onPress={() => { hideCard(); router.push(`/gathering/${selectedPin.id}` as any); }}
