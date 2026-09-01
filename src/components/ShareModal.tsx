@@ -79,7 +79,7 @@ export default function ShareModal({ visible, onClose, myUid, shareText, onShare
         <TextInput
           style={s.search}
           placeholder="팔로잉 검색"
-          placeholderTextColor="#9A9A9A"
+          placeholderTextColor="#7A5C38"
           value={query}
           onChangeText={setQuery}
         />
@@ -193,7 +193,7 @@ const s = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   row: {
     flexDirection: 'row',
@@ -239,7 +239,7 @@ const s = StyleSheet.create({
     color: '#1A1108',
   },
   sentBtnText: {
-    color: '#9A9A9A',
+    color: '#7A5C38',
     fontFamily: 'AppleSDGothicNeo-Regular',
   },
 });

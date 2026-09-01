@@ -1,4 +1,4 @@
-﻿// 경로: app/signup.tsx
+// 경로: app/signup.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';

@@ -51,7 +51,8 @@
 - **Border:** `#D4D4D4` — dividers, card borders, input borders
 - **Text primary:** `#1A1108` — near-black with warm undertone (NOT #000000)
 - **Text muted:** `#7A5C38` — metadata, timestamps, secondary labels
-- **Text light:** `#B89060` — placeholder text, disabled states
+- **Icon/label inactive:** `#8A6030` — inactive tab icons, inactive mode circles, deselected dropdown/segment text (needed a shade darker than `#B89060` to stay AA-passing since these carry real meaning, not just placeholders)
+- **Text light:** `#B89060` — placeholder text, disabled states, decorative dimmed items only — never for content the user needs to read
 - **Success:** `#4CAF6A`
 - **Error:** `#E05252`
 - **Warning:** `#F59E0B`
@@ -86,7 +87,7 @@
   pill: 9999px (badges, pills, avatar borders)
   badge-star: custom SVG polygon (6-point star shape)
   ```
-- **Bottom tab bar:** 5 tabs — 홈 / 지도 / 모임 / 퀘스트 / 나. Active: `#FFAC30`. Inactive: `#B89060`.
+- **Bottom tab bar:** 5 tabs — 홈 / 지도 / 모임 / 퀘스트 / 나. Active: `#FFAC30`. Inactive: `#8A6030` (not `#B89060` — that fails AA on white, see contrast table).
 - **Sheriff badge (UI element):** 6-point SVG star — use as score indicator, not just a number. Fills in as score grows. Pulse animation on rank-up.
 
 ## Motion
@@ -158,7 +159,7 @@
 ```
 지도  |  피드  |  모임  |  채팅  |  프로필
 ```
-- Active color: `#FFAC30`. Inactive: `#B89060`. Background: `#FFFFFF`.
+- Active color: `#FFAC30`. Inactive: `#8A6030`. Background: `#FFFFFF`.
 - Icons: use react-native-vector-icons or custom SVG — NOT FontAwesome (too generic)
 - 퀘스트 has NO dedicated top-level tab — quests are discovered on the map
 

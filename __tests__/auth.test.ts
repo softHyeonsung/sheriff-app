@@ -25,6 +25,7 @@ jest.mock('firebase/auth', () => ({
 
 jest.mock('firebase/firestore', () => ({
   doc: jest.fn(),
+  getDoc: jest.fn(),
   setDoc: jest.fn(),
   serverTimestamp: jest.fn(() => 'MOCK_TIMESTAMP'),
 }));
@@ -35,7 +36,7 @@ import {
   signInWithEmailAndPassword,
   signInWithCustomToken,
 } from 'firebase/auth';
-import { setDoc } from 'firebase/firestore';
+import { getDoc, setDoc } from 'firebase/firestore';
 
 const mockUser = { uid: 'uid-123', email: 'test@test.com' };
 
@@ -48,6 +49,7 @@ describe('signUp', () => {
     (createUserWithEmailAndPassword as jest.Mock).mockResolvedValue({
       user: mockUser,
     });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
     (setDoc as jest.Mock).mockResolvedValue(undefined);
 
     const result = await signUp('test@test.com', 'password123');
@@ -84,15 +86,18 @@ describe('signUp', () => {
     expect(setDoc).not.toHaveBeenCalled();
   });
 
-  it('merge:true means repeated signUp does not overwrite existing data', async () => {
+  it('re-login (existing doc) merges only email+provider, does not resend full doc', async () => {
     (createUserWithEmailAndPassword as jest.Mock).mockResolvedValue({
       user: mockUser,
     });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => true });
     (setDoc as jest.Mock).mockResolvedValue(undefined);
 
     await signUp('test@test.com', 'password123');
 
+    const docData = (setDoc as jest.Mock).mock.calls[0][1];
     const setDocOptions = (setDoc as jest.Mock).mock.calls[0][2];
+    expect(docData).toEqual({ email: 'test@test.com', provider: 'email' });
     expect(setDocOptions).toEqual({ merge: true });
   });
 });
@@ -125,6 +130,7 @@ describe('loginWithKakaoCustomToken', () => {
     (signInWithCustomToken as jest.Mock).mockResolvedValue({
       user: mockUser,
     });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
     (setDoc as jest.Mock).mockResolvedValue(undefined);
 
     await loginWithKakaoCustomToken('valid-custom-token');

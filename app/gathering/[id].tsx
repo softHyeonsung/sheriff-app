@@ -991,5 +991,5 @@ const menuStyles = StyleSheet.create({
     paddingVertical: 18,
   },
   itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
-  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9E9E9E' },
+  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 });

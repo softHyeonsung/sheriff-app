@@ -24,7 +24,7 @@ import { useAuthStore } from '../src/store/authStore';
 
 const MAX_IMAGES = 5;
 const MAX_CHARS  = 500;
-const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '6d840fb987f5a8ffac05946ef5e9b00c';
+const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '';
 
 interface KakaoPlaceItem {
   id: string;
@@ -242,7 +242,7 @@ export default function CreatePostScreen() {
           <TextInput
             style={styles.contentInput}
             placeholder={`동네 소식을 공유해보세요.\n#해시태그를 입력하면 자동으로 추가돼요`}
-            placeholderTextColor="#9E9E9E"
+            placeholderTextColor="#B89060"
             value={content}
             onChangeText={(t) => t.length <= MAX_CHARS && setContent(t)}
             multiline
@@ -327,7 +327,7 @@ export default function CreatePostScreen() {
             <TextInput
               style={styles.placeSearchInput}
               placeholder="장소명, 주소를 입력하세요"
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor="#B89060"
               value={placeSearchText}
               onChangeText={setPlaceSearchText}
               onSubmitEditing={() => searchKakaoPlaces(placeSearchText)}
@@ -540,13 +540,13 @@ const styles = StyleSheet.create({
   placeAddr: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#6B6B6B',
+    color: '#7A5C38',
     marginTop: 2,
   },
   placePlaceholder: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9E9E9E',
+    color: '#B89060',
   },
 
   // Tips
@@ -634,13 +634,13 @@ const styles = StyleSheet.create({
   placeResultAddr: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#6B6B6B',
+    color: '#7A5C38',
     marginBottom: 2,
   },
   placeResultCat: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9E9E9E',
+    color: '#B89060',
   },
   placeResultSep: {
     height: 1,
@@ -654,6 +654,6 @@ const styles = StyleSheet.create({
   placeEmptyText: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9E9E9E',
+    color: '#B89060',
   },
 });

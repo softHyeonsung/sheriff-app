@@ -4,46 +4,33 @@ Items deferred from /plan-ceo-review on 2026-04-03.
 
 ---
 
-## P1 — Fix before Google login goes live
+## RESOLVED — stale by the time of the 2026-07-31 code audit
 
-### Google login broken on Android (`id_token` undefined)
-**What:** `responseType: 'id_token'` is not supported on Android by Google's OAuth policy.
-`googleResponse.params.id_token` is always `undefined` on Android — the login silently fails.
-**Why:** Any Android user who taps "Google로 계속하기" gets nothing.
-**How:** Switch to `responseType: 'code'` + PKCE, then exchange the auth code for an
-`id_token` via `expo-auth-session`'s `exchangeCodeAsync`, or route through a Cloud Function.
-**Effort:** M (human: ~3h / CC: ~20min)
-**File:** `app/login.tsx` lines 39-44, 57-64
-**Ref:** https://docs.expo.dev/guides/authentication/#google
+The three items below were logged on 2026-04-03 against an earlier version of the
+auth code. Re-checked while auditing for ONE store (원스토어) submission: the actual
+login flow was rewritten in commit `26534ee` (Kakao Firebase Custom Token + security
+hardening) and no longer has these bugs. Leaving the record here instead of just
+deleting it, since the original reports weren't wrong for the code that existed then.
 
----
-
-## P1 — Fix before Kakao login goes live
-
-### Kakao users get blank nickname on first login
-**What:** Firebase Custom Token auth never populates `user.email`. After Kakao login,
-`createUserDoc` always writes `email: ''` and `nickname: ''`.
-**Why:** Every Kakao user lands with an empty display name — broken first impression.
-**How:** Two options:
-  - (A) Include email + nickname in custom token claims from the Cloud Function
-  - (B) Show a "Set your nickname" screen after first Kakao login (detect `nickname === ''`)
-  Option B is better UX — Kakao users often prefer a separate app nickname.
-**Effort:** M (human: ~2h / CC: ~15min)
-**File:** `src/api/auth.ts` + Cloud Function + new NicknameSetup screen
-
----
-
-## P2 — Fix before sharing with real users
-
-### Hide unconfigured social login buttons
-**What:** The login screen shows Google, Kakao, and Apple buttons even when credentials
-are not configured. Greyed-out buttons that do nothing confuse real users.
-**Why:** Dead UI looks unfinished and creates a bad first impression before credentials are real.
-**How:** Hide social buttons behind a credential check (e.g. `KAKAO_REST_API_KEY !== 'YOUR_KAKAO_REST_API_KEY'`)
-or simply remove them from the UI until the credentials are configured.
-**Effort:** S (human: ~30min / CC: ~5min)
-**File:** `app/login.tsx`
-**Depends on:** Real Kakao/Google credentials being configured
+- **Google login on Android (`id_token` undefined):** `app/login.tsx`'s
+  `handleGoogleLogin` doesn't use `expo-auth-session`'s Google provider (the thing
+  Google restricts for Android-type client IDs). It manually opens
+  `accounts.google.com/o/oauth2/v2/auth` via `WebBrowser.openAuthSessionAsync` (system
+  browser, not embedded WebView) against a **Web application** OAuth client
+  (`GOOGLE_WEB_CLIENT_ID`), which Google's policy does allow for the implicit
+  `response_type=id_token` flow. Not retested on a real device this session — flagged
+  as "no longer the bug that was described," not as "verified working."
+- **Kakao blank nickname on first login:** `app/login.tsx`'s `handleKakaoLogin` calls
+  `loginWithKakao` (`src/api/kakaoAuth.ts`), which never touches the client-side
+  `createUserDoc` helper that used to blank the field. The `kakaoCustomToken` Cloud
+  Function now does the entire Firestore upsert server-side with the real nickname
+  before minting the custom token. (`loginWithKakaoCustomToken` in `src/api/auth.ts`
+  still exists and still has the blanking risk, but it's dead code — nothing in the
+  app calls it, only its own test does.)
+- **Hide unconfigured social login buttons:** `KAKAO_REST_API_KEY` and
+  `GOOGLE_WEB_CLIENT_ID` are both populated with real-looking values now, not
+  placeholders — the buttons aren't dead UI. Re-open this if either credential goes
+  back to a placeholder.
 
 ---
 
@@ -82,40 +69,39 @@ Items deferred from /plan-ceo-review on 2026-07-22 (동네 연대기 — 지도 
 
 ---
 
-Items found by /review on 2026-07-27 while reviewing map-chronicle-quest — all pre-existing, out of scope for that feature.
+Items found by /review on 2026-07-27 while reviewing map-chronicle-quest — all pre-existing, out of scope for that feature. **Fixed on 2026-07-31** during pre-ONE store code audit; kept here for the record.
 
-## P1 — Cloud Functions 과금/DoS 노출
+## DONE — Cloud Functions 과금/DoS 노출 (부분 해결)
 
 ### kakaoDirections/odsayDirections에 App Check·rate limit 없음
-**What:** `functions/src/index.ts`의 두 Cloud Function은 `request.auth != null`만 확인하고 App Check나 유저당 호출 제한이 없다.
-**Why:** 카카오 로그인 계정만 있으면(만들기 쉬움) 앱 UI를 거치지 않고 함수를 직접 반복 호출해 Kakao Mobility/ODSay API 과금을 무한정 늘릴 수 있다. 이번에 추가한 코스 추천 기능은 탭 1번에 최대 4번 체이닝 호출하므로 노출을 더 키운다.
-**How:** Firebase App Check 추가 + uid별 rate limit(Firestore 카운터 또는 Cloud Functions rate-limit extension).
-**Effort:** M (human: ~4h / CC: ~30min)
-**File:** `functions/src/index.ts`
+**What:** 두 Cloud Function이 `request.auth != null`만 확인하고 유저당 호출 제한이 없었다.
+**Fix:** `functions/src/index.ts`에 `checkAndIncrementDailyLimit()` 추가 — uid별 하루 50회로 제한(Firestore 트랜잭션, `users/{uid}/daily_stats/{date}` 문서 재사용). 한도 초과 시 `resource-exhausted` 에러.
+**남은 부분:** 이건 App Check(클라이언트 증명)가 아니라 순수 카운터 기반 제한이다. 진짜 App Check(reCAPTCHA/Play Integrity)는 네이티브 SDK 연동 + Firebase 콘솔 설정이 필요해 코드만으로 끝나지 않으므로 별도 작업으로 남김.
+**File:** `functions/src/index.ts` (재배포 필요: `firebase deploy --only functions`)
 
-## P1 — 하드코딩된 Kakao REST API 키 노출
+## DONE — 하드코딩된 Kakao REST API 키 노출
 
 ### create-post.tsx/create-gathering.tsx에 API 키가 소스에 하드코딩됨
-**What:** `KAKAO_REST_KEY`가 `create-post.tsx`/`create-gathering.tsx`에는 여전히 `?? '6d840fb987f5a8ffac05946ef5e9b00c'` 폴백으로 하드코딩돼 있다. `index.tsx`는 이미 `?? ''`로 제거됐는데 나머지 두 파일만 남아 불일치.
-**Why:** 실제 키가 git 히스토리에 그대로 노출되어 있고, 세 파일이 서로 다른 동작을 한다(env var 없는 빌드에서 index.tsx만 조용히 검색 실패).
-**How:** 세 파일 모두 `?? ''`로 통일하고, 필요하면 키를 하나의 공유 상수 모듈로 옮겨 재발 방지. 노출된 키는 Kakao 개발자 콘솔에서 재발급 고려.
-**Effort:** S (human: ~30min / CC: ~10min)
+**Fix:** 두 파일 모두 `?? '6d840fb987f5a8ffac05946ef5e9b00c'` → `?? ''`로 통일(`index.tsx`와 동일 패턴). `.env`에 실키가 있어 로컬 동작엔 영향 없음.
+**남은 부분:** git 히스토리에는 옛 커밋에 실키가 그대로 남아있다 — 원한다면 Kakao 개발자 콘솔에서 재발급 고려.
 **File:** `app/create-post.tsx`, `app/create-gathering.tsx`
 
-## P2 — 전역 posts 구독 스케일 문제
+## DONE — 전역 posts 구독 스케일 문제
 
 ### 여러 화면이 필터 없이 전체 posts 컬렉션을 구독
-**What:** `shared-map/[uid].tsx`, `index.tsx`, `profile.tsx`, `user/[uid].tsx`가 전부 `subscribeFeedPosts()`로 전체 posts를 구독한 뒤 클라이언트에서 `author_id`로 필터링한다. `where` 절 없음.
-**Why:** 게시물 수가 늘어날수록 화면 하나 열 때마다 전체 컬렉션을 내려받는 비용이 커진다. 이번 랜드마크 기능은 기존 패턴을 그대로 재사용했을 뿐, 새로 만든 문제는 아님.
-**How:** `subscribeFeedPosts`에 선택적 `where('author_id','==',uid)` 파라미터 추가하고 화면별로 점진 전환.
-**Effort:** M (human: ~1일 / CC: ~1시간)
-**File:** `src/api/posts.ts` + 4개 소비 화면
+**Fix:** `subscribeFeedPosts()`에 선택적 `authorId` 파라미터 추가 — `where('author_id','==',authorId)`로 서버 필터링(복합 인덱스가 필요 없도록 orderBy 없이 받고 클라이언트에서 timestamp로 정렬). `profile.tsx`/`user/[uid].tsx`/`shared-map/[uid].tsx` 세 화면에 적용.
+**적용 안 함:** `index.tsx`/`feed.tsx`는 커뮤니티 전체 피드라서 의도적으로 전역 구독 유지 — 문제였던 적 없음.
+**File:** `src/api/posts.ts` + 3개 소비 화면
 
-## P2 — 길찾기 stale-response 레이스
+## DONE — 길찾기 stale-response 레이스
 
 ### searchRoute의 dirSearchCancelled가 단일 boolean이라 경쟁 상태 발생
-**What:** `app/(tabs)/index.tsx`의 `dirSearchCancelled`는 공유 boolean이라, 모달을 닫았다 빠르게 다시 열고 검색하면 새 요청이 `false`로 리셋한 뒤 먼저 보낸(오래된) 요청의 응답이 화면을 덮어쓸 수 있다.
-**Why:** 사용자가 목적지를 바꿔가며 빠르게 검색할 때 잘못된 경로가 그려질 수 있음.
-**How:** boolean 대신 요청마다 증가하는 세대 토큰(`requestId.current++`)으로 교체, 응답 시점에 비교.
-**Effort:** S (human: ~1h / CC: ~10min)
-**File:** `app/(tabs)/index.tsx` (searchRoute 함수)
+**Fix:** `dirSearchCancelled`(boolean) → `dirRequestId`(세대 토큰, `useRef(0)`)로 교체. `searchRoute` 시작 시 `++dirRequestId.current`로 로컬 `requestId`를 캡처하고, 각 await 이후 및 `finally`에서 `requestId === dirRequestId.current`로 비교해 오래된 응답을 무시한다. `closeDirections`도 동일 카운터 증가로 통일.
+**File:** `app/(tabs)/index.tsx` (searchRoute, closeDirections)
+
+## DONE — auth.test.ts의 getDoc 목 누락
+
+### `__tests__/auth.test.ts`가 `getDoc is not a function`으로 실패
+**What:** `firebase/firestore` 목이 `getDoc`을 제공하지 않았는데, `createUserDoc`이 신규/재로그인 분기를 위해 `getDoc`을 먼저 호출하도록 바뀐 뒤로 계속 깨져있었다.
+**Fix:** 목에 `getDoc: jest.fn()` 추가. 기존 "merge:true means repeated signUp..." 테스트는 사실 신규 유저 분기(merge 없음)를 테스트하고 있어 항상 잘못된 기대값이었다 — `getDoc` exists:true를 모킹해 실제 재로그인 병합 분기(`{email, provider}` + `{merge:true}`)를 검증하도록 재작성.
+**File:** `__tests__/auth.test.ts`

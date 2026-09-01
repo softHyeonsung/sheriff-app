@@ -53,9 +53,7 @@ export default function UserProfileScreen() {
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    const unsub = subscribeFeedPosts((all) => {
-      setPosts(all.filter((p) => p.author_id === targetUid));
-    });
+    const unsub = subscribeFeedPosts(setPosts, undefined, targetUid);
     return unsub;
   }, [targetUid, myUid]);
 

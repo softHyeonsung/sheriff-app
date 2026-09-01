@@ -520,7 +520,7 @@ export default function MapScreen() {
   const modeAnim         = useRef(new Animated.Value(0)).current;
   const hasLoadedNearby  = useRef(false);
   const dirDebounceTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dirSearchCancelled = useRef(false);
+  const dirRequestId = useRef(0); // 세대 토큰 — 응답이 최신 요청인지 비교 (레이스 방지)
   const nearbyTourSpots  = useRef<PlaceResult[]>([]);
   const mapHtml          = React.useMemo(() => buildMapHTML(KAKAO_JS_KEY, MOCK_PINS), []);
 
@@ -900,7 +900,7 @@ export default function MapScreen() {
   };
 
   const closeDirections = () => {
-    dirSearchCancelled.current = true;
+    dirRequestId.current++;
     setDirectionsVisible(false);
     setDirDestText('');
     setDirDestResults([]);
@@ -932,7 +932,7 @@ export default function MapScreen() {
 
   const searchRoute = async () => {
     if (!dirSelectedDest) return;
-    dirSearchCancelled.current = false;
+    const requestId = ++dirRequestId.current;
     const origin = userLoc ?? SEOUL;
     const destLat = parseFloat(dirSelectedDest.y);
     const destLng = parseFloat(dirSelectedDest.x);
@@ -952,7 +952,7 @@ export default function MapScreen() {
           destLng, destLat,
         });
 
-        if (dirSearchCancelled.current) return;
+        if (requestId !== dirRequestId.current) return;
         if (routeData.found) {
           const fareInfo = routeData.taxiFare
             ? `택시 약 ${routeData.taxiFare.toLocaleString()}원`
@@ -969,7 +969,7 @@ export default function MapScreen() {
           destLng, destLat, platform: Platform.OS,
         });
 
-        if (dirSearchCancelled.current) return;
+        if (requestId !== dirRequestId.current) return;
         const bestPath = odsayData.result?.path?.[0];
         if (!bestPath) {
           Alert.alert('경로 없음', '해당 구간의 대중교통 경로를 찾을 수 없어요.');
@@ -1041,7 +1041,7 @@ export default function MapScreen() {
       console.warn('[directions]', e);
       Alert.alert('오류', '경로 탐색 중 문제가 발생했어요.');
     } finally {
-      setDirLoading(false);
+      if (requestId === dirRequestId.current) setDirLoading(false);
     }
   };
 

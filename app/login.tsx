@@ -180,7 +180,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="이메일"
-            placeholderTextColor="#9E9E9E"
+            placeholderTextColor="#B89060"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -191,7 +191,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="비밀번호"
-            placeholderTextColor="#9E9E9E"
+            placeholderTextColor="#B89060"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   tagline: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#6B6B6B',
+    color: '#7A5C38',
     marginTop: 6,
   },
   form: { marginBottom: 8 },
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   divider: { flex: 1, height: 1, backgroundColor: '#D4D4D4' },
   dividerText: {
     marginHorizontal: 12,
-    color: '#9E9E9E',
+    color: '#B89060',
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
   },

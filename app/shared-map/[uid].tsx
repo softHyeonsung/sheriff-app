@@ -176,10 +176,12 @@ export default function SharedMapScreen() {
   useEffect(() => {
     loadProfileAndPins();
 
-    // 게시물 기반 랜드마크 집계 — 신규 쿼리 없이 기존 전역 구독을 재사용해 상대방 uid로 그룹핑한다.
+    // 상대방 uid로 서버 필터링해 구독 — 전역 posts를 받지 않는다.
+    if (!uid) return;
     const unsub = subscribeFeedPosts(
-      (all) => { if (uid) setLandmarks(groupPostsByLandmark(all, uid)); },
+      (all) => setLandmarks(groupPostsByLandmark(all, uid)),
       () => setLoadError(true),
+      uid,
     );
     return unsub;
   }, [uid, loadProfileAndPins]);

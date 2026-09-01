@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+# 서비스 계정 키 (절대 커밋 금지)
+scripts/service-account-key.json
+
 # Expo
 .expo/
 dist/
@@ -42,6 +45,13 @@ yarn-error.*
 
 # Firebase Keys (firebaseConfig.ts is safe to commit — Firebase web API key is public by design)
 .env
+functions/.env
+
+# Firebase CLI local deploy cache
+.firebase/
+
+# scratch/working files
+.scratch/
 
 #gstack
 .claude/

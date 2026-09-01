@@ -149,7 +149,7 @@ export default function ProfileSetupScreen() {
           value={nickname}
           onChangeText={setNickname}
           placeholder="사용할 닉네임을 입력하세요"
-          placeholderTextColor="#9E9E9E"
+          placeholderTextColor="#B89060"
           maxLength={20}
           returnKeyType="done"
         />
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#6B6B6B',
+    color: '#7A5C38',
     lineHeight: 22,
   },
   field: {
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9E9E9E',
+    color: '#B89060',
     textAlign: 'right',
     marginTop: 4,
   },
@@ -302,11 +302,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   placeholder: {
-    color: '#9E9E9E',
+    color: '#B89060',
   },
   arrow: {
     fontSize: 20,
-    color: '#9E9E9E',
+    color: '#B89060',
   },
   breadcrumb: {
     flexDirection: 'row',
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   },
   breadcrumbSep: {
     fontSize: 13,
-    color: '#9E9E9E',
+    color: '#B89060',
   },
   saveBtn: {
     height: 54,
@@ -416,6 +416,6 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     fontSize: 15,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9E9E9E',
+    color: '#B89060',
   },
 });

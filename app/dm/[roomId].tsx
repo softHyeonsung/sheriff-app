@@ -246,7 +246,7 @@ export default function DMRoomScreen() {
           value={input}
           onChangeText={setInput}
           placeholder="메시지를 입력하세요"
-          placeholderTextColor="#9A9A9A"
+          placeholderTextColor="#7A5C38"
           multiline
           maxLength={500}
           blurOnSubmit={false}
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 11,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     marginTop: 3,
   },
   inputBar: {
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
   mapShareSub: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   mapShareBtn: {
     flexDirection: 'row',
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   systemMsg: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     backgroundColor: '#F5F5F5',
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -556,7 +556,7 @@ const menu = StyleSheet.create({
   memberCount: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   divider: {
     height: 1,
@@ -579,7 +579,7 @@ const menu = StyleSheet.create({
   loadingText: {
     fontSize: 13,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     paddingHorizontal: 8,
     paddingTop: 8,
   },
@@ -618,7 +618,7 @@ const menu = StyleSheet.create({
   meLabel: {
     fontSize: 11,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     backgroundColor: '#F5F5F5',
     paddingHorizontal: 7,
     paddingVertical: 3,

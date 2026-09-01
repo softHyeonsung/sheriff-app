@@ -66,13 +66,13 @@ export default function NewDMScreen() {
       </View>
 
       <View style={styles.searchWrap}>
-        <Ionicons name="search" size={16} color="#9A9A9A" style={{ marginRight: 8 }} />
+        <Ionicons name="search" size={16} color="#7A5C38" style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           value={searchQuery}
           onChangeText={handleSearch}
           placeholder="닉네임으로 검색"
-          placeholderTextColor="#9A9A9A"
+          placeholderTextColor="#7A5C38"
           autoFocus
           returnKeyType="search"
         />
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
-    borderRadius: 12,
+    borderRadius: 22,
     margin: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -149,9 +149,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFAC30',
     justifyContent: 'center',
     alignItems: 'center',
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     marginTop: 40,
   },
 });

@@ -219,9 +219,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -248,12 +248,12 @@ const styles = StyleSheet.create({
   roomTime: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   lastMsg: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   sep: {
     height: 1,

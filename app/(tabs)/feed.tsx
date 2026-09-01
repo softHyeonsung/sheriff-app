@@ -1,4 +1,4 @@
-﻿// 경로: app/(tabs)/feed.tsx
+// 경로: app/(tabs)/feed.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -422,9 +422,9 @@ const card = StyleSheet.create({
     gap: 10,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   },
   searchBar: {
     height: 44,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F5',
     borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,4 +1,4 @@
-﻿// src/components/ShieldIcon.tsx
+// src/components/ShieldIcon.tsx
 // ShieldStar — app identity mark. Used in login screen hero and badge displays.
 // Spec from DESIGN.md § Icons — star polygon inscribed in shield silhouette, amber fill, leather outline.
 

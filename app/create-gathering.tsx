@@ -26,7 +26,7 @@ import { useAuthStore } from '../src/store/authStore';
 
 const MAX_DESC_CHARS  = 300;
 const MAX_TITLE_CHARS = 40;
-const KAKAO_REST_KEY  = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '6d840fb987f5a8ffac05946ef5e9b00c';
+const KAKAO_REST_KEY  = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '';
 
 const AMPM_ITEMS  = ['오전', '오후'];
 const HOUR_ITEMS  = ['1','2','3','4','5','6','7','8','9','10','11','12'];
@@ -91,7 +91,7 @@ function DrumPicker({ items, selectedIndex, onChange, width = 80 }: DrumPickerPr
 }
 
 const drumSt = StyleSheet.create({
-  item:   { fontSize: 20, fontFamily: 'AppleSDGothicNeo-Regular', color: '#C0C0C0' },
+  item:   { fontSize: 20, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
   itemSel:{ fontSize: 22, fontFamily: 'AppleSDGothicNeo-Bold',    color: '#1A1108' },
   selBar: { height: ITEM_H, borderTopWidth: 1.5, borderBottomWidth: 1.5, borderColor: '#FFAC30' },
 });
@@ -413,7 +413,7 @@ export default function CreateGatheringScreen() {
           <TextInput
             style={styles.titleInput}
             placeholder="모임 제목을 입력해주세요"
-            placeholderTextColor="#9A9A9A"
+            placeholderTextColor="#7A5C38"
             value={title}
             onChangeText={(t) => t.length <= MAX_TITLE_CHARS && setTitle(t)}
             returnKeyType="next"
@@ -429,7 +429,7 @@ export default function CreateGatheringScreen() {
           <TextInput
             style={styles.descInput}
             placeholder={`모임을 소개해주세요.\n#해시태그를 입력하면 자동으로 추가돼요`}
-            placeholderTextColor="#9A9A9A"
+            placeholderTextColor="#7A5C38"
             value={description}
             onChangeText={(t) => t.length <= MAX_DESC_CHARS && setDescription(t)}
             multiline
@@ -469,7 +469,7 @@ export default function CreateGatheringScreen() {
               <Ionicons name="close-circle-outline" size={18} color="#1A1108" />
             </TouchableOpacity>
           ) : (
-            <Ionicons name="chevron-forward" size={16} color="#9A9A9A" />
+            <Ionicons name="chevron-forward" size={16} color="#7A5C38" />
           )}
         </TouchableOpacity>
 
@@ -487,7 +487,7 @@ export default function CreateGatheringScreen() {
               <Ionicons name="close-circle-outline" size={18} color="#1A1108" />
             </TouchableOpacity>
           ) : (
-            <Ionicons name="chevron-forward" size={16} color="#9A9A9A" />
+            <Ionicons name="chevron-forward" size={16} color="#7A5C38" />
           )}
         </TouchableOpacity>
 
@@ -686,7 +686,7 @@ export default function CreateGatheringScreen() {
             <TextInput
               style={styles.placeSearchInput}
               placeholder="장소명, 주소를 입력하세요"
-              placeholderTextColor="#9E9E9E"
+              placeholderTextColor="#B89060"
               value={placeQuery}
               onChangeText={setPlaceQuery}
               onSubmitEditing={() => searchPlaces(placeQuery)}
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
   },
   rowCardTitle:      { fontSize: 14, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#1A1108' },
   rowCardSub:        { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#1A1108', marginTop: 2 },
-  rowCardPlaceholder:{ fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9A9A9A' },
+  rowCardPlaceholder:{ fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 
   memberCounter: { flexDirection: 'row', alignItems: 'center', marginLeft: 'auto', gap: 4 },
   counterBtn: {
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D4D4D4',
     justifyContent: 'center', alignItems: 'center',
   },
-  counterBtnDisabled: { borderColor: '#F0F0F0' },
+  counterBtnDisabled: { borderColor: '#F5F5F5' },
   counterValue: {
     fontSize: 16, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108',
     minWidth: 28, textAlign: 'center',
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
   calMonthLabel:{ fontSize: 18, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
   calWeekRow:   { flexDirection: 'row', marginBottom: 6 },
   calHeaderCell:{ width: CAL_CELL, alignItems: 'center' },
-  calWeekLabel: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#6B6B6B' },
+  calWeekLabel: { fontSize: 13, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#7A5C38' },
   calSunLabel:  { color: '#E05252' },
   calGrid:      { flexDirection: 'row', flexWrap: 'wrap' },
   calCell: {
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
 
   // Drum picker row
   pickerSectionLabel: { fontSize: 14, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#8A6030', marginBottom: 16 },
-  pickerSectionHint:  { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9A9A9A' },
+  pickerSectionHint:  { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
   drumRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   drumColon: { fontSize: 26, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108', marginHorizontal: 2, marginBottom: 4 },
 
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#D4D4D4', backgroundColor: '#FFFFFF',
   },
   dayChipActive:    { backgroundColor: '#FFAC30', borderColor: '#FFAC30' },
-  dayChipText:      { fontSize: 14, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#6B6B6B' },
+  dayChipText:      { fontSize: 14, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#7A5C38' },
   dayChipTextActive:{ color: '#1A1108', fontFamily: 'AppleSDGothicNeo-Bold' },
 
   pickerConfirmBtn: {
@@ -924,9 +924,9 @@ const styles = StyleSheet.create({
   placeResultIcon:  { marginRight: 12, marginTop: 2 },
   placeResultInfo:  { flex: 1 },
   placeResultName:  { fontSize: 15, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#1A1108', marginBottom: 3 },
-  placeResultAddr:  { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Regular', color: '#6B6B6B', marginBottom: 2 },
-  placeResultCat:   { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9E9E9E' },
+  placeResultAddr:  { fontSize: 13, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38', marginBottom: 2 },
+  placeResultCat:   { fontSize: 12, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
   placeResultSep:   { height: 1, backgroundColor: '#F5F5F5', marginHorizontal: 16 },
   placeEmptyBox:    { alignItems: 'center', paddingTop: 64 },
-  placeEmptyText:   { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9E9E9E' },
+  placeEmptyText:   { fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', color: '#B89060' },
 });

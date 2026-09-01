@@ -168,6 +168,147 @@ export const onScoreUpdate = functions.firestore.onDocumentUpdated(
   }
 );
 
+// ── 유료 API 호출 한도 (과금 남용 방지) ─────────────────────────────────────────
+// uid별로 하루 호출 횟수를 Firestore 트랜잭션으로 세어, 초과 시 거절한다.
+// App Check 같은 클라이언트 증명 계층은 아니지만, 로그인 계정만으로 무한 반복
+// 호출해 Kakao Mobility/ODSay API 과금을 늘리는 시나리오는 이걸로 막힌다.
+
+async function checkAndIncrementDailyLimit(
+  uid: string,
+  field: string,
+  maxCount: number,
+): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC 기준, 대략적인 일일 경계)
+  const ref = db.collection('users').doc(uid).collection('daily_stats').doc(today);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const current: number = snap.exists ? (snap.data()?.[field] ?? 0) : 0;
+    if (current >= maxCount) return false;
+    tx.set(ref, { [field]: current + 1, updated_at: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    return true;
+  });
+}
+
+// ── 카카오 길찾기 프록시 ────────────────────────────────────────────────────────
+// Kakao Mobility REST 키를 서버에만 보관하고 클라이언트에 노출하지 않는다.
+
+export const kakaoDirections = onCall(
+  { region: 'asia-northeast3' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다');
+
+    const allowed = await checkAndIncrementDailyLimit(request.auth.uid, 'directions_calls', 50);
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', '오늘 경로 탐색 횟수를 초과했어요. 내일 다시 시도해주세요.');
+    }
+
+    const { originLng, originLat, destLng, destLat } = request.data as {
+      originLng: number; originLat: number;
+      destLng: number; destLat: number;
+    };
+
+    if (
+      !isFinite(originLat) || !isFinite(originLng) ||
+      !isFinite(destLat)   || !isFinite(destLng)
+    ) {
+      throw new HttpsError('invalid-argument', '좌표가 올바르지 않습니다');
+    }
+
+    const key = process.env.KAKAO_REST_KEY;
+    if (!key) throw new HttpsError('internal', 'KAKAO_REST_KEY not configured');
+
+    const url =
+      `https://apis-navi.kakaomobility.com/v1/directions` +
+      `?origin=${originLng},${originLat}` +
+      `&destination=${destLng},${destLat}` +
+      `&priority=RECOMMEND`;
+
+    const res = await fetch(url, {
+      headers: { Authorization: `KakaoAK ${key}` },
+    });
+    if (!res.ok) throw new HttpsError('internal', `Kakao HTTP ${res.status}`);
+
+    const json = await res.json() as {
+      routes?: Array<{
+        result_code: number;
+        summary: { duration: number; distance: number; fare?: { taxi?: number } };
+        sections?: Array<{ roads?: Array<{ vertexes: number[] }> }>;
+      }>;
+    };
+    const route = json.routes?.[0];
+
+    if (!route || route.result_code !== 0) {
+      return { found: false as const };
+    }
+
+    const { duration, distance, fare } = route.summary;
+    const vertexes: number[] = [];
+    route.sections?.forEach((section) => {
+      section.roads?.forEach((road) => {
+        road.vertexes.forEach(v => vertexes.push(v));
+      });
+    });
+
+    return {
+      found: true as const,
+      duration,
+      distance,
+      taxiFare: fare?.taxi ?? null,
+      vertexes,
+    };
+  }
+);
+
+// ── ODSay 대중교통 경로 프록시 ───────────────────────────────────────────────────
+// ODSay API 키를 서버에만 보관하고 클라이언트 번들에 노출하지 않는다.
+
+export const odsayDirections = onCall(
+  { region: 'asia-northeast3' },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', '로그인이 필요합니다');
+
+    const allowed = await checkAndIncrementDailyLimit(request.auth.uid, 'transit_directions_calls', 50);
+    if (!allowed) {
+      throw new HttpsError('resource-exhausted', '오늘 경로 탐색 횟수를 초과했어요. 내일 다시 시도해주세요.');
+    }
+
+    const { originLng, originLat, destLng, destLat } = request.data as {
+      originLng: number; originLat: number;
+      destLng: number; destLat: number;
+    };
+
+    if (
+      !isFinite(originLat) || !isFinite(originLng) ||
+      !isFinite(destLat)   || !isFinite(destLng)
+    ) {
+      throw new HttpsError('invalid-argument', '좌표가 올바르지 않습니다');
+    }
+
+    const isIos = (request.data as { platform?: string }).platform === 'ios';
+    const key = isIos
+      ? process.env.ODSAY_API_KEY_IOS
+      : process.env.ODSAY_API_KEY_ANDROID;
+    if (!key) throw new HttpsError('internal', 'ODSAY_API_KEY not configured');
+
+    const url =
+      `https://api.odsay.com/v1/api/searchPubTransPathT` +
+      `?SX=${originLng}&SY=${originLat}` +
+      `&EX=${destLng}&EY=${destLat}` +
+      `&apiKey=${encodeURIComponent(key)}`;
+
+    const res = await fetch(url);
+    if (!res.ok) throw new HttpsError('internal', `ODSay HTTP ${res.status}`);
+
+    const json = await res.json() as {
+      error?: { message?: string };
+      result?: { path?: unknown[] };
+    };
+    if (json.error) throw new HttpsError('internal', json.error.message ?? 'ODSay 오류');
+
+    return json;
+  }
+);
+
 // ── 유틸 ──────────────────────────────────────────────────────────────────────
 
 function extractGu(address: string): string | null {

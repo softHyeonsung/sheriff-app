@@ -13,6 +13,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../firebaseConfig';
@@ -121,11 +122,17 @@ export async function createPost(params: {
   return docRef.id;
 }
 
+// authorId를 넘기면 서버 쪽에서 author_id로 필터링해 전체 컬렉션을 내려받지 않는다.
+// (orderBy와 조합하면 복합 인덱스가 필요해지므로, 필터링 시엔 orderBy 없이 받아
+// 클라이언트에서 정렬한다 — 한 명의 게시물만 대상이라 비용이 작다.)
 export function subscribeFeedPosts(
   callback: (posts: FirestorePost[]) => void,
   onError?: (error: Error) => void,
+  authorId?: string,
 ): () => void {
-  const q = query(collection(db, 'posts'), orderBy('timestamp', 'desc'));
+  const q = authorId
+    ? query(collection(db, 'posts'), where('author_id', '==', authorId))
+    : query(collection(db, 'posts'), orderBy('timestamp', 'desc'));
   return onSnapshot(q, (snap) => {
     const posts: FirestorePost[] = snap.docs.map((d) => {
       const data = d.data();
@@ -146,6 +153,9 @@ export function subscribeFeedPosts(
         timestamp: data.timestamp ?? null,
       };
     });
+    if (authorId) {
+      posts.sort((a, b) => (b.timestamp?.seconds ?? 0) - (a.timestamp?.seconds ?? 0));
+    }
     callback(posts);
   }, (error) => {
     callback([]);

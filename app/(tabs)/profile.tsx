@@ -63,9 +63,7 @@ export default function ProfileScreen() {
     if (!uid) return;
     fetchMyProfile(uid).then(setProfile).catch(() => {});
     loadSavedPins(uid).then(setSavedPinsList).catch(() => {});
-    const unsubPosts = subscribeFeedPosts((all) => {
-      setMyPosts(all.filter((p) => p.author_id === uid));
-    });
+    const unsubPosts = subscribeFeedPosts(setMyPosts, undefined, uid);
     const unsubGatherings = subscribeGatherings((all) => {
       setMyGatherings(
         all.filter((g) => g.host_id === uid || g.participants.some((p) => p.uid === uid))
@@ -219,7 +217,7 @@ export default function ProfileScreen() {
         <View style={styles.scoreTopRow}>
           <Text style={styles.scoreLabel}>Sheriff Score</Text>
           <Text style={styles.scoreRankText}>{profile?.rank_level ?? '새내기'}</Text>
-          <Ionicons name="chevron-forward" size={14} color="#9A9A9A" style={{ marginLeft: 2 }} />
+          <Ionicons name="chevron-forward" size={14} color="#7A5C38" style={{ marginLeft: 2 }} />
         </View>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${Math.round(rankProgress * 100)}%` }]} />
@@ -280,7 +278,7 @@ export default function ProfileScreen() {
               const isHost = g.host_id === uid;
               const statusColor =
                 g.status === 'recruiting' ? '#4CAF6A' :
-                g.status === 'full'       ? '#FFAC30' : '#9A9A9A';
+                g.status === 'full'       ? '#FFAC30' : '#7A5C38';
               const statusLabel =
                 g.status === 'recruiting' ? '모집 중' :
                 g.status === 'full'       ? '모집 완료' :
@@ -302,9 +300,9 @@ export default function ProfileScreen() {
                   </View>
                   <Text style={styles.gatheringTitle} numberOfLines={1}>{g.title}</Text>
                   <View style={styles.gatheringFooter}>
-                    <Ionicons name="calendar-outline" size={13} color="#9A9A9A" />
+                    <Ionicons name="calendar-outline" size={13} color="#7A5C38" />
                     <Text style={styles.gatheringAt} numberOfLines={1}>{g.meeting_at}</Text>
-                    <Ionicons name="people-outline" size={13} color="#9A9A9A" style={{ marginLeft: 10 }} />
+                    <Ionicons name="people-outline" size={13} color="#7A5C38" style={{ marginLeft: 10 }} />
                     <Text style={styles.gatheringMembers}>
                       {g.participants.length + 1}/{g.max_members}
                     </Text>
@@ -553,7 +551,7 @@ export default function ProfileScreen() {
                   </View>
                   <Text style={styles.historyLabel}>{item.label}</Text>
                   {item.count !== null && (
-                    <Text style={{ fontSize: 13, fontFamily: 'AppleSDGothicNeo-Regular', color: '#9A9A9A', marginRight: 6 }}>
+                    <Text style={{ fontSize: 13, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38', marginRight: 6 }}>
                       ×{item.count}
                     </Text>
                   )}
@@ -569,7 +567,7 @@ export default function ProfileScreen() {
               {loadingLeaderboard ? (
                 <ActivityIndicator color="#FFAC30" style={{ marginTop: 24 }} />
               ) : leaderboard.length === 0 ? (
-                <Text style={{ color: '#9A9A9A', fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', textAlign: 'center', marginTop: 24 }}>
+                <Text style={{ color: '#7A5C38', fontSize: 14, fontFamily: 'AppleSDGothicNeo-Regular', textAlign: 'center', marginTop: 24 }}>
                   순위 데이터가 없어요
                 </Text>
               ) : (
@@ -641,9 +639,9 @@ const styles = StyleSheet.create({
     marginRight: 18,
   },
   avatar: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: '#F5F5F5',
     justifyContent: 'center',
     alignItems: 'center',
@@ -698,7 +696,7 @@ const styles = StyleSheet.create({
   rankChipSub: {
     fontSize: 11,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   statsRow: {
     flexDirection: 'row',
@@ -744,11 +742,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   progressTrack: {
     height: 8,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F5F5F5',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -759,7 +757,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F5F5F5',
     marginTop: 8,
   },
 
@@ -767,7 +765,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F5F5F5',
   },
   tab: {
     flex: 1,
@@ -782,7 +780,7 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   tabLabelActive: {
     fontFamily: 'AppleSDGothicNeo-Bold',
@@ -857,7 +855,7 @@ const styles = StyleSheet.create({
   gatheringCategory: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   gatheringTitle: {
     fontSize: 15,
@@ -872,13 +870,13 @@ const styles = StyleSheet.create({
   gatheringAt: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     flex: 1,
   },
   gatheringMembers: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
 
   // ── Badge grid ────────────────────────────────────────────────────
@@ -910,7 +908,7 @@ const styles = StyleSheet.create({
   badgeDesc: {
     fontSize: 10,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     textAlign: 'center',
     marginTop: 2,
   },
@@ -924,7 +922,7 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   emptySubText: {
     fontSize: 12,
@@ -987,7 +985,7 @@ const styles = StyleSheet.create({
   scoreCardSub: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     marginTop: 2,
   },
   rankPill: {
@@ -1013,7 +1011,7 @@ const styles = StyleSheet.create({
   rankSectionSub: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     marginTop: 6,
   },
   historyTitle: {
@@ -1072,7 +1070,7 @@ const styles = StyleSheet.create({
   listEmptyText: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   // 장소
   placeRow: {
@@ -1098,7 +1096,7 @@ const styles = StyleSheet.create({
   placeRowAddr: {
     fontSize: 12,
     fontFamily: 'AppleSDGothicNeo-Regular',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   categoryChip: {
     backgroundColor: '#F5F5F5',
@@ -1172,7 +1170,7 @@ const styles = StyleSheet.create({
   scoreTabBar: {
     flexDirection: 'row',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#F5F5F5',
     marginBottom: 16,
   },
   scoreTab: {
@@ -1188,7 +1186,7 @@ const styles = StyleSheet.create({
   scoreTabLabel: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Medium',
-    color: '#9A9A9A',
+    color: '#7A5C38',
   },
   scoreTabLabelActive: {
     fontFamily: 'AppleSDGothicNeo-Bold',
@@ -1226,7 +1224,7 @@ const styles = StyleSheet.create({
   rankingNumber: {
     fontSize: 14,
     fontFamily: 'AppleSDGothicNeo-Bold',
-    color: '#9A9A9A',
+    color: '#7A5C38',
     textAlign: 'center',
   },
   rankingAvatar: {
