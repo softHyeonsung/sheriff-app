@@ -66,13 +66,13 @@ export const getKakaoUserInfo = async (accessToken: string): Promise<KakaoUser> 
 
 // Step 3: Send Kakao access token to Cloud Function → get Firebase Custom Token
 // → signInWithCustomToken so Firestore rules see a real request.auth.uid
-const getFirebaseCustomToken = async (accessToken: string): Promise<void> => {
+const getFirebaseCustomToken = async (accessToken: string, agreedToTerms?: boolean): Promise<void> => {
   const functions = getFunctions(undefined, 'asia-northeast3');
-  const kakaoCustomToken = httpsCallable<{ accessToken: string }, { customToken: string }>(
+  const kakaoCustomToken = httpsCallable<{ accessToken: string; agreedToTerms?: boolean }, { customToken: string }>(
     functions,
     'kakaoCustomToken',
   );
-  const result = await kakaoCustomToken({ accessToken });
+  const result = await kakaoCustomToken({ accessToken, agreedToTerms });
   const auth = getAuth();
   await signInWithCustomToken(auth, result.data.customToken);
 };
@@ -99,11 +99,12 @@ export const clearKakaoSession = async (): Promise<void> => {
 export const loginWithKakao = async (
   code: string,
   redirectUri: string,
+  agreedToTerms?: boolean,
 ): Promise<KakaoUser> => {
   const accessToken = await exchangeKakaoCode(code, redirectUri);
   const kakaoUser   = await getKakaoUserInfo(accessToken);
   // Cloud Function이 Firestore upsert + Custom Token 발급을 모두 처리함
-  await getFirebaseCustomToken(accessToken);
+  await getFirebaseCustomToken(accessToken, agreedToTerms);
   await persistKakaoSession(kakaoUser);
   return kakaoUser;
 };

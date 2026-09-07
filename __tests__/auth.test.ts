@@ -52,7 +52,7 @@ describe('signUp', () => {
     (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
     (setDoc as jest.Mock).mockResolvedValue(undefined);
 
-    const result = await signUp('test@test.com', 'password123');
+    const result = await signUp('test@test.com', 'password123', undefined, true);
 
     expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(
       {},
@@ -83,6 +83,18 @@ describe('signUp', () => {
       message: 'Firebase: Error (auth/email-already-in-use).',
     });
     // Firestore doc should NOT be created if auth fails
+    expect(setDoc).not.toHaveBeenCalled();
+  });
+
+  it('throws terms/not-agreed and does not create a doc when consent is missing', async () => {
+    (createUserWithEmailAndPassword as jest.Mock).mockResolvedValue({
+      user: mockUser,
+    });
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+
+    await expect(signUp('test@test.com', 'password123')).rejects.toMatchObject({
+      code: 'terms/not-agreed',
+    });
     expect(setDoc).not.toHaveBeenCalled();
   });
 
@@ -133,7 +145,7 @@ describe('loginWithKakaoCustomToken', () => {
     (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
     (setDoc as jest.Mock).mockResolvedValue(undefined);
 
-    await loginWithKakaoCustomToken('valid-custom-token');
+    await loginWithKakaoCustomToken('valid-custom-token', true);
 
     const docData = (setDoc as jest.Mock).mock.calls[0][1];
     expect(docData.provider).toBe('kakao');

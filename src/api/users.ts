@@ -21,6 +21,7 @@ export interface UserProfile {
   saved_places: string[];
   followers: string[];
   following: string[];
+  blocked_users: string[];
   rank_level: string;
   is_home_verified: boolean;
 }
@@ -45,6 +46,7 @@ export async function fetchMyProfile(uid: string): Promise<UserProfile | null> {
     saved_places: d.saved_places ?? [],
     followers: d.followers ?? [],
     following: d.following ?? [],
+    blocked_users: d.blocked_users ?? [],
     rank_level: d.rank_level ?? 'rookie',
     is_home_verified: d.is_home_verified ?? false,
   };
@@ -91,6 +93,14 @@ export async function followUser(myUid: string, targetUid: string): Promise<void
 export async function unfollowUser(myUid: string, targetUid: string): Promise<void> {
   await updateDoc(doc(db, 'users', myUid), { following: arrayRemove(targetUid) });
   await updateDoc(doc(db, 'users', targetUid), { followers: arrayRemove(myUid) });
+}
+
+export async function blockUser(myUid: string, targetUid: string): Promise<void> {
+  await updateDoc(doc(db, 'users', myUid), { blocked_users: arrayUnion(targetUid) });
+}
+
+export async function unblockUser(myUid: string, targetUid: string): Promise<void> {
+  await updateDoc(doc(db, 'users', myUid), { blocked_users: arrayRemove(targetUid) });
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {

@@ -16,6 +16,7 @@ export default function RootLayout() {
   const setKakaoUser      = useAuthStore((s) => s.setKakaoUser);
   const setProfileComplete = useAuthStore((s) => s.setProfileComplete);
   const setNickname       = useAuthStore((s) => s.setNickname);
+  const setBlockedUsers   = useAuthStore((s) => s.setBlockedUsers);
   const isLoggedIn        = useAuthStore((s) => s.isLoggedIn);
   const firebaseUser      = useAuthStore((s) => s.user);
   const kakaoUser         = useAuthStore((s) => s.kakaoUser);
@@ -48,6 +49,7 @@ export default function RootLayout() {
     if (!isLoggedIn()) {
       // 비로그인 상태 → profileComplete false로 확정 (가드가 login으로 보냄)
       setProfileComplete(false);
+      setBlockedUsers([]);
       return;
     }
     const uid = auth.currentUser?.uid;
@@ -61,6 +63,7 @@ export default function RootLayout() {
         const data = snap.data();
         setProfileComplete(data?.profile_complete ?? false);
         setNickname(data?.nickname ?? null);
+        setBlockedUsers(data?.blocked_users ?? []);
       })
       .catch(() => setProfileComplete(false));
   }, [firebaseUser, kakaoUser]);

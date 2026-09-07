@@ -8,11 +8,13 @@ interface AuthState {
   loading:            boolean;
   profileComplete:    boolean | null; // null = 아직 확인 안 됨
   nickname:           string | null;
+  blockedUsers:       string[];
   setUser:            (user: FirebaseUser | null) => void;
   setKakaoUser:       (user: KakaoUser   | null) => void;
   setLoading:         (loading: boolean)          => void;
   setProfileComplete: (v: boolean | null)          => void;
   setNickname:        (nickname: string | null)   => void;
+  setBlockedUsers:    (uids: string[])            => void;
   isLoggedIn:         () => boolean;
 }
 
@@ -22,12 +24,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   loading:         true,
   profileComplete: null,
   nickname:        null,
+  blockedUsers:    [],
 
   setUser:            (user)      => set({ user,      loading: false }),
   setKakaoUser:       (kakaoUser) => set({ kakaoUser, loading: false }),
   setLoading:         (loading)   => set({ loading }),
   setProfileComplete: (v)         => set({ profileComplete: v }),
   setNickname:        (nickname)  => set({ nickname }),
+  setBlockedUsers:    (uids)      => set({ blockedUsers: uids }),
 
   isLoggedIn: () => !!(get().user || get().kakaoUser),
 }));

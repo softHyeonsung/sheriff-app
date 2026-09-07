@@ -15,7 +15,15 @@ import { AuthProvider } from '../types/user';
 // Firestore 유저 문서 생성 헬퍼 (소셜 로그인에서도 재사용)
 // New users get a full document with createdAt.
 // Existing users only update mutable fields — createdAt is never overwritten.
-const createUserDoc = async (uid: string, email: string, provider: AuthProvider, nickname?: string) => {
+// agreedToTerms: 신규 가입 시 필수 약관(이용약관/개인정보처리방침/위치정보 수집·이용) 동의 여부.
+// 미동의 상태로는 계정을 생성하지 않는다 (원스토어 상품 검증 — 위치정보 고지·동의 절차 요건).
+const createUserDoc = async (
+  uid: string,
+  email: string,
+  provider: AuthProvider,
+  nickname?: string,
+  agreedToTerms?: boolean,
+) => {
   const userRef = doc(db, 'users', uid);
   const snap    = await getDoc(userRef);
 
@@ -23,6 +31,9 @@ const createUserDoc = async (uid: string, email: string, provider: AuthProvider,
     // Re-login: update only fields that may change between sessions
     await setDoc(userRef, { email, provider }, { merge: true });
   } else {
+    if (!agreedToTerms) {
+      throw { code: 'terms/not-agreed', message: '약관에 동의해야 가입할 수 있어요.' };
+    }
     // First sign-up: write full document
     await setDoc(userRef, {
       uid,
@@ -36,19 +47,22 @@ const createUserDoc = async (uid: string, email: string, provider: AuthProvider,
       saved_places: [],
       followers: [],
       following: [],
+      blocked_users: [],
       rank_level: 'rookie',
       is_home_verified: false,
       profile_complete: false,
+      terms_agreed_at: serverTimestamp(),
+      location_consent: true,
       createdAt: serverTimestamp(),
     });
   }
 };
 
 // 1. 회원가입
-export const signUp = async (email: string, pass: string, nickname?: string) => {
+export const signUp = async (email: string, pass: string, nickname?: string, agreedToTerms?: boolean) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-    await createUserDoc(userCredential.user.uid, email, 'email', nickname);
+    await createUserDoc(userCredential.user.uid, email, 'email', nickname, agreedToTerms);
     return userCredential.user;
   } catch (error: any) {
     throw { code: error.code ?? 'unknown', message: error.message ?? String(error) };
@@ -66,12 +80,12 @@ export const login = async (email: string, pass: string) => {
 };
 
 // 3. 구글 로그인 (idToken은 OAuth 흐름에서 받음)
-export const loginWithGoogle = async (idToken: string) => {
+export const loginWithGoogle = async (idToken: string, agreedToTerms?: boolean) => {
   try {
     const credential = GoogleAuthProvider.credential(idToken);
     const userCredential = await signInWithCredential(auth, credential);
     const { uid, email } = userCredential.user;
-    await createUserDoc(uid, email ?? '', 'google');
+    await createUserDoc(uid, email ?? '', 'google', undefined, agreedToTerms);
     return userCredential.user;
   } catch (error: any) {
     throw { code: error.code ?? 'unknown', message: error.message ?? String(error) };
@@ -79,13 +93,13 @@ export const loginWithGoogle = async (idToken: string) => {
 };
 
 // 4. 애플 로그인
-export const loginWithApple = async (identityToken: string, rawNonce: string) => {
+export const loginWithApple = async (identityToken: string, rawNonce: string, agreedToTerms?: boolean) => {
   try {
     const provider = new OAuthProvider('apple.com');
     const credential = provider.credential({ idToken: identityToken, rawNonce });
     const userCredential = await signInWithCredential(auth, credential);
     const { uid, email } = userCredential.user;
-    await createUserDoc(uid, email ?? '', 'apple');
+    await createUserDoc(uid, email ?? '', 'apple', undefined, agreedToTerms);
     return userCredential.user;
   } catch (error: any) {
     throw { code: error.code ?? 'unknown', message: error.message ?? String(error) };
@@ -93,11 +107,11 @@ export const loginWithApple = async (identityToken: string, rawNonce: string) =>
 };
 
 // 5. 카카오 로그인 (Firebase Custom Token — Cloud Function에서 발급)
-export const loginWithKakaoCustomToken = async (customToken: string) => {
+export const loginWithKakaoCustomToken = async (customToken: string, agreedToTerms?: boolean) => {
   try {
     const userCredential = await signInWithCustomToken(auth, customToken);
     const { uid, email } = userCredential.user;
-    await createUserDoc(uid, email ?? '', 'kakao');
+    await createUserDoc(uid, email ?? '', 'kakao', undefined, agreedToTerms);
     return userCredential.user;
   } catch (error: any) {
     throw { code: error.code ?? 'unknown', message: error.message ?? String(error) };

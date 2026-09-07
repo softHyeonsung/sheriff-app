@@ -85,11 +85,28 @@ boanggwan/                        ← 프론트엔드 (React Native)
   saved_places: string[],         // 저장한 장소 ID 리스트 (나의 지도)
   followers: string[],            // 나를 팔로우하는 uid 리스트
   following: string[],            // 내가 팔로우하는 uid 리스트
+  blocked_users: string[],        // 내가 차단한 uid 리스트 (피드에서 해당 유저 콘텐츠 필터링)
   rank_level: string,             // 현재 등급 명칭
   home_location?: GeoPoint,       // 주거지 인증 좌표
   home_address?: string,
   is_home_verified: boolean,
+  terms_agreed_at: Timestamp,     // 이용약관·개인정보처리방침·위치정보 수집이용 동의 시각(가입 시 1회)
+  location_consent: boolean,      // 위치정보 수집·이용 동의 여부 (미동의 시 가입 불가)
   createdAt: Timestamp
+}
+```
+
+### reports/{report_id}
+```typescript
+{
+  report_id: string,
+  reporter_id: string,            // 신고자 uid
+  target_type: 'post' | 'user' | 'comment',
+  target_id: string,              // 신고 대상 post_id / uid / comment_id
+  reason: 'spam' | 'abuse' | 'inappropriate' | 'other',
+  detail: string,
+  status: 'pending',               // 클라이언트는 read/update/delete 불가 — 운영자가 콘솔에서 처리
+  created_at: Timestamp
 }
 ```
 
@@ -182,6 +199,10 @@ chats/{room_id}/messages/{message_id}
 - AUTH-03: 자동 로그인 (onAuthStateChanged)
 - AUTH-04: 로그아웃
 - AUTH-05: 애플 로그인 (App Store 정책 필수)
+- AUTH-06: 회원가입/최초 소셜 로그인 시 약관 동의 절차 — 이용약관·개인정보처리방침·위치기반서비스
+  이용약관(위치정보 수집·이용) 필수 동의 체크 후에만 계정 생성 (`TermsAgreementSection`,
+  이메일 가입은 `app/signup.tsx`, 소셜 로그인은 `app/login.tsx` — 기기당 1회만 노출).
+  카카오는 `kakaoCustomToken` Cloud Function에서 서버 측으로 재검증.
 
 ### USER (유저 프로필)
 - USER-01~02: 프로필 조회/수정
@@ -189,6 +210,16 @@ chats/{room_id}/messages/{message_id}
 - USER-04: 주거지 인증 (expo-location GPS → Firestore GeoPoint)
 - USER-05~08: 타 유저 조회, 팔로우/언팔로우
 - USER-09~11: 포인트/뱃지/저장장소 조회
+- USER-12: 유저 차단/차단해제 (`blocked_users` 배열, 차단 시 상대방 게시물이 내 피드에서
+  필터링됨 — `subscribeFeedPosts`의 `excludeAuthorIds`)
+
+### SAFETY (신고 및 차단)
+- SAFETY-01: 게시물 신고 (`app/post/[id].tsx` 3-dot 메뉴 → 사유 선택 → `reports` 컬렉션에 기록)
+- SAFETY-02: 유저 신고 (`app/user/[uid].tsx` 프로필 메뉴)
+- SAFETY-03: 유저 차단/차단해제 — 차단 시 해당 유저의 게시물이 피드·지도·프로필 등
+  `subscribeFeedPosts`를 쓰는 모든 화면에서 제외됨
+- SAFETY-04: 신고 접수는 클라이언트에서 생성만 가능, 조회·처리는 Firestore 콘솔에서 운영자가
+  수행 (자동 삭제/제재 로직은 2차 이후)
 
 ### MAP (지도)
 - MAP-01: Kakao Map 초기화, 현재 위치 중심 렌더링

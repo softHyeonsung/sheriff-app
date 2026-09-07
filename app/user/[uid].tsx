@@ -4,9 +4,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,7 +18,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FirestorePost, subscribeFeedPosts } from '../../src/api/posts';
-import { UserProfile, fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
+import { promptAndReport } from '../../src/api/reports';
+import { UserProfile, blockUser, fetchMyProfile, followUser, unblockUser, unfollowUser } from '../../src/api/users';
 import { useAuthStore } from '../../src/store/authStore';
 
 const SCREEN_W = Dimensions.get('window').width;
@@ -35,6 +39,11 @@ export default function UserProfileScreen() {
   const [loading, setLoading]       = useState(true);
   const [following, setFollowing]   = useState(false);
   const [activeTab, setActiveTab]   = useState<'posts' | 'badges'>('posts');
+  const [showMenu, setShowMenu]     = useState(false);
+
+  const blockedUsers  = useAuthStore((s) => s.blockedUsers);
+  const setBlockedUsers = useAuthStore((s) => s.setBlockedUsers);
+  const isBlocked = !!targetUid && blockedUsers.includes(targetUid);
 
   // 자기 자신이면 내 프로필 탭으로 이동
   useEffect(() => {
@@ -78,6 +87,31 @@ export default function UserProfileScreen() {
 
   const isSheriff = (profile?.badge_list ?? []).some((b) => /^sheriff_\d{4}_\d{2}$/.test(b));
 
+  const handleToggleBlock = () => {
+    if (!myUid || !targetUid) return;
+    setShowMenu(false);
+    if (isBlocked) {
+      setBlockedUsers(blockedUsers.filter((id) => id !== targetUid));
+      unblockUser(myUid, targetUid).catch(() => setBlockedUsers([...blockedUsers, targetUid]));
+      return;
+    }
+    Alert.alert(
+      '차단하기',
+      `${profile?.nickname ?? '이 사용자'}님을 차단할까요? 차단하면 이 사용자의 게시물이 더 이상 보이지 않아요.`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '차단',
+          style: 'destructive',
+          onPress: () => {
+            setBlockedUsers([...blockedUsers, targetUid]);
+            blockUser(myUid, targetUid).catch(() => setBlockedUsers(blockedUsers.filter((id) => id !== targetUid)));
+          },
+        },
+      ],
+    );
+  };
+
   if (loading) {
     return (
       <View style={[s.center, { paddingTop: insets.top }]}>
@@ -110,8 +144,47 @@ export default function UserProfileScreen() {
           <Ionicons name="chevron-back" size={26} color="#1A1108" />
         </TouchableOpacity>
         <Text style={s.headerTitle} numberOfLines={1}>{profile.nickname}</Text>
-        <View style={s.headerIconBtn} />
+        {myUid && myUid !== targetUid ? (
+          <TouchableOpacity
+            style={s.headerIconBtn}
+            onPress={() => setShowMenu(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="더보기"
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color="#1A1108" />
+          </TouchableOpacity>
+        ) : (
+          <View style={s.headerIconBtn} />
+        )}
       </View>
+
+      {/* 신고 / 차단 메뉴 */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <Pressable style={menuStyles.backdrop} onPress={() => setShowMenu(false)}>
+          <View style={menuStyles.sheet}>
+            <TouchableOpacity
+              style={menuStyles.item}
+              onPress={() => {
+                setShowMenu(false);
+                if (myUid && targetUid) promptAndReport(myUid, 'user', targetUid);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="flag-outline" size={20} color="#E05252" />
+              <Text style={menuStyles.itemDanger}>신고하기</Text>
+            </TouchableOpacity>
+            <View style={menuStyles.sep} />
+            <TouchableOpacity style={menuStyles.item} onPress={handleToggleBlock} activeOpacity={0.7}>
+              <Ionicons name={isBlocked ? 'lock-open-outline' : 'ban-outline'} size={20} color="#E05252" />
+              <Text style={menuStyles.itemDanger}>{isBlocked ? '차단 해제하기' : '차단하기'}</Text>
+            </TouchableOpacity>
+            <View style={menuStyles.sep} />
+            <TouchableOpacity style={menuStyles.item} onPress={() => setShowMenu(false)} activeOpacity={0.7}>
+              <Text style={menuStyles.itemCancel}>취소</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Profile info */}
@@ -395,4 +468,29 @@ const s = StyleSheet.create({
 
   backBtn: { paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#FFAC30', borderRadius: 14 },
   backBtnText: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
+});
+
+const menuStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
+    paddingTop: 8,
+  },
+  sep: { height: 1, backgroundColor: '#F5F5F5' },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+  },
+  itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
+  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 });

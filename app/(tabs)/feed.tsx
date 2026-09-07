@@ -310,10 +310,12 @@ export default function FeedScreen() {
     await deletePost(postId, uid).catch(() => {});
   };
 
+  const blockedUsers = useAuthStore((s) => s.blockedUsers);
+
   useEffect(() => {
-    const unsub = subscribeFeedPosts(setPosts);
+    const unsub = subscribeFeedPosts(setPosts, undefined, undefined, blockedUsers);
     return unsub;
-  }, []);
+  }, [blockedUsers]);
 
   const hasPosts = posts.length > 0;
 

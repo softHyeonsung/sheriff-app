@@ -17,9 +17,11 @@ import {
 } from 'react-native';
 import { login, loginWithApple, loginWithGoogle } from '../src/api/auth';
 import { KAKAO_REST_API_KEY, loginWithKakao } from '../src/api/kakaoAuth';
+import { hasAgreedTermsLocally, markTermsAgreedLocally } from '../src/api/termsConsent';
 import GoogleIcon from '../src/components/GoogleIcon';
 import KakaoIcon from '../src/components/KakaoIcon';
 import ShieldIcon from '../src/components/ShieldIcon';
+import TermsAgreementSection, { TermsAgreementValues, isAllRequiredAgreed } from '../src/components/TermsAgreementSection';
 import { useAuthStore } from '../src/store/authStore';
 
 const KAKAO_REDIRECT_URI  = 'https://sheriff-app-dab41.web.app/kakao';
@@ -32,6 +34,23 @@ export default function LoginScreen() {
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [needsConsent, setNeedsConsent] = useState(false);
+  const [terms, setTerms] = useState<TermsAgreementValues>({ terms: false, privacy: false, location: false });
+
+  // 이 기기에서 이미 한 번 동의했으면(가입 여부와 무관하게) 소셜 버튼 매번 체크박스로
+  // 막지 않는다 — 서버 측 진짜 신규 가입 동의 기록은 createUserDoc에서 별도로 남긴다.
+  React.useEffect(() => {
+    hasAgreedTermsLocally().then((agreed) => setNeedsConsent(!agreed));
+  }, []);
+
+  const requireConsent = (): boolean => {
+    if (!needsConsent) return true;
+    if (!isAllRequiredAgreed(terms)) {
+      Alert.alert('약관 동의 필요', '처음 로그인하려면 필수 약관에 동의해야 해요.');
+      return false;
+    }
+    return true;
+  };
 
   // ── 이메일 로그인 ────────────────────────────────────────────────────────────
   const handleLogin = async () => {
@@ -63,6 +82,7 @@ export default function LoginScreen() {
 
   // ── 카카오 로그인 ────────────────────────────────────────────────────────────
   const handleKakaoLogin = async () => {
+    if (!requireConsent()) return;
     if (!KAKAO_REST_API_KEY || KAKAO_REST_API_KEY === 'YOUR_KAKAO_REST_API_KEY') {
       Alert.alert('설정 오류', '카카오 API 키가 설정되지 않았어요.');
       return;
@@ -84,8 +104,9 @@ export default function LoginScreen() {
       const code = new URL(result.url).searchParams.get('code');
       if (!code) throw new Error('인증 코드를 받지 못했어요.');
 
-      const kakaoUser = await loginWithKakao(code, KAKAO_REDIRECT_URI);
+      const kakaoUser = await loginWithKakao(code, KAKAO_REDIRECT_URI, needsConsent);
       setKakaoUser(kakaoUser);
+      if (needsConsent) await markTermsAgreedLocally();
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('카카오 로그인 실패', String(e?.message ?? e));
@@ -96,6 +117,7 @@ export default function LoginScreen() {
 
   // ── 구글 로그인 ──────────────────────────────────────────────────────────────
   const handleGoogleLogin = async () => {
+    if (!requireConsent()) return;
     setLoading(true);
     try {
       // nonce: Google implicit flow에서 id_token 요청 시 필수
@@ -121,7 +143,8 @@ export default function LoginScreen() {
       const idToken = new URL(result.url).searchParams.get('id_token');
       if (!idToken) throw new Error('Google ID 토큰을 받지 못했어요.');
 
-      await loginWithGoogle(idToken);
+      await loginWithGoogle(idToken, needsConsent);
+      if (needsConsent) await markTermsAgreedLocally();
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('Google 로그인 실패', String(e?.message ?? e));
@@ -132,6 +155,7 @@ export default function LoginScreen() {
 
   // ── 애플 로그인 ──────────────────────────────────────────────────────────────
   const handleAppleLogin = async () => {
+    if (!requireConsent()) return;
     setLoading(true);
     try {
       const randomBytes = await Crypto.getRandomBytesAsync(32);
@@ -146,7 +170,8 @@ export default function LoginScreen() {
         nonce,
       });
       if (credential.identityToken) {
-        await loginWithApple(credential.identityToken, rawNonce);
+        await loginWithApple(credential.identityToken, rawNonce, needsConsent);
+        if (needsConsent) await markTermsAgreedLocally();
         router.replace('/(tabs)');
       }
     } catch (error: any) {
@@ -222,13 +247,20 @@ export default function LoginScreen() {
           <View style={styles.divider} />
         </View>
 
+        {needsConsent && (
+          <>
+            <Text style={styles.consentNotice}>처음 로그인하려면 아래 약관에 동의해주세요.</Text>
+            <TermsAgreementSection values={terms} onChange={setTerms} />
+          </>
+        )}
+
         {/* 소셜 버튼 */}
         <View style={styles.socialGroup}>
           {/* 카카오 */}
           <TouchableOpacity
             style={[styles.socialBtn, styles.kakaoBtn, loading && styles.disabledBtn]}
             onPress={handleKakaoLogin}
-            disabled={loading}
+            disabled={loading || (needsConsent && !isAllRequiredAgreed(terms))}
           >
             <View style={styles.socialBtnIcon}><KakaoIcon size={22} /></View>
             <Text style={styles.kakaoBtnText}>카카오로 계속하기</Text>
@@ -238,7 +270,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[styles.socialBtn, styles.googleBtn, loading && styles.disabledBtn]}
             onPress={handleGoogleLogin}
-            disabled={loading}
+            disabled={loading || (needsConsent && !isAllRequiredAgreed(terms))}
           >
             <View style={styles.socialBtnIcon}><GoogleIcon size={22} /></View>
             <Text style={styles.googleBtnText}>Google로 계속하기</Text>
@@ -249,7 +281,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={[styles.socialBtn, styles.appleBtn, loading && styles.disabledBtn]}
               onPress={handleAppleLogin}
-              disabled={loading}
+              disabled={loading || (needsConsent && !isAllRequiredAgreed(terms))}
             >
               <View style={styles.socialBtnIcon}>
                 <Ionicons name="logo-apple" size={22} color="#FFFFFF" />
@@ -326,6 +358,12 @@ const styles = StyleSheet.create({
   signupLink: {
     color: '#FFAC30',
     fontFamily: 'AppleSDGothicNeo-SemiBold',
+  },
+  consentNotice: {
+    fontSize: 12,
+    fontFamily: 'AppleSDGothicNeo-Regular',
+    color: '#7A5C38',
+    marginBottom: 8,
   },
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
   divider: { flex: 1, height: 1, backgroundColor: '#D4D4D4' },

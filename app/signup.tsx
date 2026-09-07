@@ -14,6 +14,8 @@ import {
   View,
 } from 'react-native';
 import { signUp } from '../src/api/auth';
+import { markTermsAgreedLocally } from '../src/api/termsConsent';
+import TermsAgreementSection, { TermsAgreementValues, isAllRequiredAgreed } from '../src/components/TermsAgreementSection';
 
 // Korean-friendly Firebase error messages
 const getErrorMessage = (code: string): string => {
@@ -32,6 +34,7 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
   const [loading, setLoading]   = useState(false);
+  const [terms, setTerms] = useState<TermsAgreementValues>({ terms: false, privacy: false, location: false });
 
   const emailRef    = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
@@ -54,10 +57,15 @@ export default function SignupScreen() {
       Alert.alert('비밀번호 오류', '비밀번호는 6자리 이상이어야 해요.');
       return;
     }
+    if (!isAllRequiredAgreed(terms)) {
+      Alert.alert('약관 동의 필요', '필수 약관에 모두 동의해야 가입할 수 있어요.');
+      return;
+    }
 
     setLoading(true);
     try {
-      await signUp(email.trim(), password, nickname.trim());
+      await signUp(email.trim(), password, nickname.trim(), true);
+      await markTermsAgreedLocally();
       // onAuthStateChanged in _layout.tsx will redirect to (tabs) automatically
     } catch (error: any) {
       Alert.alert('회원가입 실패', getErrorMessage(error.code));
@@ -155,10 +163,12 @@ export default function SignupScreen() {
             <Text style={styles.errorText}>비밀번호가 일치하지 않아요</Text>
           )}
 
+          <TermsAgreementSection values={terms} onChange={setTerms} />
+
           <TouchableOpacity
-            style={[styles.signupBtn, loading && styles.disabledBtn]}
+            style={[styles.signupBtn, (loading || !isAllRequiredAgreed(terms)) && styles.disabledBtn]}
             onPress={handleSignUp}
-            disabled={loading}
+            disabled={loading || !isAllRequiredAgreed(terms)}
             accessibilityLabel="회원가입"
             accessibilityRole="button"
           >

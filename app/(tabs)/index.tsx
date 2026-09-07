@@ -615,11 +615,12 @@ export default function MapScreen() {
   // Subscribe to posts for post pins (basic mode) + 내 연대기 랜드마크 집계 (gathering mode)
   const [postsError, setPostsError] = useState(false);
   const [postsRetryKey, setPostsRetryKey] = useState(0);
+  const blockedUsers = useAuthStore((s) => s.blockedUsers);
   useEffect(() => {
     setPostsError(false);
-    const unsub = subscribeFeedPosts(setPosts, () => setPostsError(true));
+    const unsub = subscribeFeedPosts(setPosts, () => setPostsError(true), undefined, blockedUsers);
     return unsub;
-  }, [postsRetryKey]);
+  }, [postsRetryKey, blockedUsers]);
   const retryPosts = useCallback(() => setPostsRetryKey((k) => k + 1), []);
 
   // Derive post pins — only posts with a real location_pin

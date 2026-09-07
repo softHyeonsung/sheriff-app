@@ -33,6 +33,7 @@ import {
   subscribeComments,
   toggleLike as toggleLikeFS,
 } from '../../src/api/posts';
+import { promptAndReport } from '../../src/api/reports';
 import { fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMapStore } from '../../src/store/mapStore';
@@ -249,14 +250,39 @@ export default function PostDetailScreen() {
         onShare={handleShare}
       />
 
-      {/* 3-dot 삭제 메뉴 */}
+      {/* 3-dot 메뉴 — 본인 게시물: 삭제 / 타인 게시물: 공유·신고 */}
       <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
         <Pressable style={menuStyles.backdrop} onPress={() => setShowMenu(false)}>
           <View style={menuStyles.sheet}>
-            <TouchableOpacity style={menuStyles.item} onPress={handleDeletePost} activeOpacity={0.7}>
-              <Ionicons name="trash-outline" size={20} color="#E05252" />
-              <Text style={menuStyles.itemDanger}>삭제하기</Text>
-            </TouchableOpacity>
+            {isMyPost ? (
+              <TouchableOpacity style={menuStyles.item} onPress={handleDeletePost} activeOpacity={0.7}>
+                <Ionicons name="trash-outline" size={20} color="#E05252" />
+                <Text style={menuStyles.itemDanger}>삭제하기</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={menuStyles.item}
+                  onPress={() => { setShowMenu(false); setShowShare(true); }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="share-outline" size={20} color="#1A1108" />
+                  <Text style={menuStyles.itemLabel}>공유하기</Text>
+                </TouchableOpacity>
+                <View style={menuStyles.sep} />
+                <TouchableOpacity
+                  style={menuStyles.item}
+                  onPress={() => {
+                    setShowMenu(false);
+                    if (uid) promptAndReport(uid, 'post', post!.id);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="flag-outline" size={20} color="#E05252" />
+                  <Text style={menuStyles.itemDanger}>신고하기</Text>
+                </TouchableOpacity>
+              </>
+            )}
             <View style={menuStyles.sep} />
             <TouchableOpacity style={menuStyles.item} onPress={() => setShowMenu(false)} activeOpacity={0.7}>
               <Text style={menuStyles.itemCancel}>취소</Text>
@@ -277,10 +303,10 @@ export default function PostDetailScreen() {
         <Text style={styles.headerTitle}>게시물</Text>
         <TouchableOpacity
           style={styles.headerIconBtn}
-          onPress={() => isMyPost ? setShowMenu(true) : setShowShare(true)}
+          onPress={() => setShowMenu(true)}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name={isMyPost ? 'ellipsis-vertical' : 'share-outline'} size={24} color="#1A1108" />
+          <Ionicons name="ellipsis-vertical" size={24} color="#1A1108" />
         </TouchableOpacity>
       </View>
 
@@ -718,5 +744,6 @@ const menuStyles = StyleSheet.create({
     paddingVertical: 18,
   },
   itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
+  itemLabel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#1A1108' },
   itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 });

@@ -14,6 +14,7 @@ export const kakaoCustomToken = onCall(
   { region: 'asia-northeast3' },
   async (request) => {
     const accessToken: string = request.data?.accessToken;
+    const agreedToTerms: boolean = request.data?.agreedToTerms === true;
     if (!accessToken) throw new HttpsError('invalid-argument', 'accessToken required');
 
     // 1. 카카오 사용자 정보 조회
@@ -34,6 +35,12 @@ export const kakaoCustomToken = onCall(
     const userRef = db.collection('users').doc(uid);
     const snap = await userRef.get();
     if (!snap.exists) {
+      // 원스토어 상품 검증 — 위치정보 수집·활용 고지 및 동의 절차 요건.
+      // 신규 가입은 클라이언트가 약관(이용약관/개인정보처리방침/위치정보 수집·이용)에
+      // 동의한 경우에만 허용한다.
+      if (!agreedToTerms) {
+        throw new HttpsError('failed-precondition', '약관에 동의해야 가입할 수 있어요.');
+      }
       await userRef.set({
         uid,
         nickname,
@@ -46,9 +53,12 @@ export const kakaoCustomToken = onCall(
         saved_places: [],
         followers: [],
         following: [],
+        blocked_users: [],
         rank_level: 'rookie',
         is_home_verified: false,
         profile_complete: false,
+        terms_agreed_at: admin.firestore.FieldValue.serverTimestamp(),
+        location_consent: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     } else {

@@ -129,6 +129,7 @@ export function subscribeFeedPosts(
   callback: (posts: FirestorePost[]) => void,
   onError?: (error: Error) => void,
   authorId?: string,
+  excludeAuthorIds?: string[],
 ): () => void {
   const q = authorId
     ? query(collection(db, 'posts'), where('author_id', '==', authorId))
@@ -156,7 +157,10 @@ export function subscribeFeedPosts(
     if (authorId) {
       posts.sort((a, b) => (b.timestamp?.seconds ?? 0) - (a.timestamp?.seconds ?? 0));
     }
-    callback(posts);
+    const filtered = excludeAuthorIds?.length
+      ? posts.filter((p) => !excludeAuthorIds.includes(p.author_id))
+      : posts;
+    callback(filtered);
   }, (error) => {
     callback([]);
     onError?.(error);
