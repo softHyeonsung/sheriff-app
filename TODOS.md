@@ -82,7 +82,7 @@ Items found by /review on 2026-07-27 while reviewing map-chronicle-quest — all
 ## DONE — 하드코딩된 Kakao REST API 키 노출
 
 ### create-post.tsx/create-gathering.tsx에 API 키가 소스에 하드코딩됨
-**Fix:** 두 파일 모두 `?? '6d840fb987f5a8ffac05946ef5e9b00c'` → `?? ''`로 통일(`index.tsx`와 동일 패턴). `.env`에 실키가 있어 로컬 동작엔 영향 없음.
+**Fix:** 두 파일 모두 하드코딩된 실키 fallback → `?? ''`로 통일(`index.tsx`와 동일 패턴). `.env`에 실키가 있어 로컬 동작엔 영향 없음.
 **남은 부분:** git 히스토리에는 옛 커밋에 실키가 그대로 남아있다 — 원한다면 Kakao 개발자 콘솔에서 재발급 고려.
 **File:** `app/create-post.tsx`, `app/create-gathering.tsx`
 
