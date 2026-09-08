@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -19,7 +20,9 @@ import { logout } from '../../src/api/auth';
 import { clearKakaoSession } from '../../src/api/kakaoAuth';
 import { FirestorePost, deletePost, subscribeFeedPosts } from '../../src/api/posts';
 import { FirestoreGathering, subscribeGatherings } from '../../src/api/gatherings';
+import { AppNotification, subscribeNotifications } from '../../src/api/notifications';
 import { loadSavedPins } from '../../src/api/savedPlaces';
+import { verifyHome } from '../../src/api/scoring';
 import { FollowUserProfile, LeaderboardEntry, UserProfile, fetchFollowers, fetchFollowing, fetchLeaderboard, fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
 import { MapPin } from '../../src/store/mapStore';
 import { BadgeDefinition, getBadge } from '../../src/constants/badges';
@@ -28,6 +31,7 @@ import { useAuthStore } from '../../src/store/authStore';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CELL = SCREEN_W / 3;
+const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ?? '';
 
 
 type ListModalType = 'places' | 'followers' | 'following' | null;
@@ -55,6 +59,7 @@ export default function ProfileScreen() {
   const [listLoading, setListLoading]       = useState(false);
   const [leaderboard, setLeaderboard]       = useState<LeaderboardEntry[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [notifs, setNotifs]                 = useState<AppNotification[]>([]);
 
   const uid      = firebaseUser?.uid ?? (kakaoUser ? `kakao_${kakaoUser.id}` : null);
   const nickname = kakaoUser?.nickname ?? firebaseUser?.displayName ?? '닉네임 없음';
@@ -69,8 +74,11 @@ export default function ProfileScreen() {
         all.filter((g) => g.host_id === uid || g.participants.some((p) => p.uid === uid))
       );
     });
-    return () => { unsubPosts(); unsubGatherings(); };
+    const unsubNotifs = subscribeNotifications(uid, setNotifs);
+    return () => { unsubPosts(); unsubGatherings(); unsubNotifs(); };
   }, [uid]);
+
+  const unreadCount = notifs.filter((n) => !n.read).length;
 
   useEffect(() => {
     if (!uid) return;
@@ -123,6 +131,53 @@ export default function ProfileScreen() {
       try { await followUser(uid, targetUid); } catch {
         fetchMyProfile(uid).then(setProfile).catch(() => {});
       }
+    }
+  };
+
+  // 주거지 인증 — GPS로 현재 위치를 받아 카카오 좌표→행정동 API로 동네명을 확인하고
+  // 최초 1회 +50점 + 뱃지 지급 (verifyHome은 이미 인증됐으면 서버에서 no-op 처리).
+  const handleVerifyHome = async () => {
+    if (!uid) return;
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('위치 권한 필요', '주거지 인증을 하려면 위치 권한을 허용해주세요.');
+      return;
+    }
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = pos.coords;
+
+      const res = await fetch(
+        `https://dapi.kakao.com/v2/local/geo/coord2regioncode.json?x=${longitude}&y=${latitude}`,
+        { headers: { Authorization: `KakaoAK ${KAKAO_REST_KEY}` } },
+      );
+      const data = await res.json();
+      const region = data.documents?.find((d: any) => d.region_type === 'H') ?? data.documents?.[0];
+      if (!region) {
+        Alert.alert('오류', '현재 위치의 동네 정보를 찾을 수 없어요.');
+        return;
+      }
+      const address = [region.region_1depth_name, region.region_2depth_name, region.region_3depth_name]
+        .filter(Boolean)
+        .join(' ');
+
+      Alert.alert(
+        '주거지 인증',
+        `현재 위치(${address})를 내 동네로 인증할까요?\n최초 인증 시 +50점을 받아요.`,
+        [
+          { text: '취소', style: 'cancel' },
+          {
+            text: '인증하기',
+            onPress: async () => {
+              await verifyHome(uid, latitude, longitude, address);
+              fetchMyProfile(uid).then(setProfile).catch(() => {});
+              Alert.alert('인증 완료', `${address}(으)로 주거지가 인증됐어요!`);
+            },
+          },
+        ],
+      );
+    } catch {
+      Alert.alert('오류', '위치를 가져오는 중 문제가 발생했어요.');
     }
   };
 
@@ -195,12 +250,30 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* Notifications */}
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => router.push('/notifications' as any)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="알림"
+        >
+          <Ionicons name="notifications-outline" size={22} color="#1A1108" />
+          {unreadCount > 0 && (
+            <View style={styles.notifBadge}>
+              <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         {/* Settings */}
         <TouchableOpacity
           style={styles.settingsBtn}
-          onPress={() => Alert.alert('설정', '준비 중이에요.', [
-            { text: '로그아웃', style: 'destructive', onPress: handleLogout },
-            { text: '닫기', style: 'cancel' },
+          onPress={() => Alert.alert('설정', '', [
+            ...(!profile?.is_home_verified
+              ? [{ text: '주거지 인증', onPress: handleVerifyHome } as const]
+              : []),
+            { text: '로그아웃', style: 'destructive' as const, onPress: handleLogout },
+            { text: '닫기', style: 'cancel' as const },
           ])}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -720,6 +793,25 @@ const styles = StyleSheet.create({
   settingsBtn: {
     marginLeft: 8,
     padding: 4,
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 15,
+    height: 15,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: '#E05252',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  notifBadgeText: {
+    fontSize: 9,
+    fontFamily: 'AppleSDGothicNeo-Bold',
+    color: '#FFFFFF',
   },
 
   // ── Sheriff Score ──────────────────────────────────────────────────

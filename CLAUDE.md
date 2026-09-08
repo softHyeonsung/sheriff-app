@@ -264,11 +264,12 @@ chats/{room_id}/messages/{message_id}
 - 퀘스트 완료: +30
 - 매월 1일 00:00 Cron Job → 지역별 상위 10명 보안관 뱃지 자동 부여
 
-### NOTIFICATION (알림) — FCM
+### NOTIFICATION (알림)
 - 모임 참여 신청 → 모임장
 - 참여 승인/거절 → 신청자
 - 퀘스트 수락/완료 → 요청자/수락자
 - 댓글 → 게시물 작성자
+- 위 이벤트는 `users/{uid}/notifications` 서브컬렉션에 기록되고, 프로필 탭 알림 벨(`app/notifications.tsx`)에서 목록으로 확인·읽음 처리 가능 (기기 푸시(FCM)는 2차 이후, 앱 내 알림 목록은 MVP 범위)
 
 ---
 

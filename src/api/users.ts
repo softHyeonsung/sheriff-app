@@ -24,6 +24,7 @@ export interface UserProfile {
   blocked_users: string[];
   rank_level: string;
   is_home_verified: boolean;
+  home_address?: string;
 }
 
 export interface LeaderboardEntry {
@@ -49,6 +50,7 @@ export async function fetchMyProfile(uid: string): Promise<UserProfile | null> {
     blocked_users: d.blocked_users ?? [],
     rank_level: d.rank_level ?? 'rookie',
     is_home_verified: d.is_home_verified ?? false,
+    home_address: d.home_address ?? undefined,
   };
 }
 

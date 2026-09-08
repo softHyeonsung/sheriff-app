@@ -1,4 +1,5 @@
 import {
+  GeoPoint,
   arrayUnion,
   doc,
   getDoc,
@@ -115,7 +116,12 @@ export async function trackPlaceSave(
 
 // ── 주거지 인증 (최초 1회 +50 + 뱃지) ───────────────────────────────────────
 
-export async function verifyHome(uid: string): Promise<void> {
+export async function verifyHome(
+  uid: string,
+  lat: number,
+  lng: number,
+  address: string,
+): Promise<void> {
   const userRef = doc(db, 'users', uid);
   let verified = false;
   let newScore = 0;
@@ -127,6 +133,8 @@ export async function verifyHome(uid: string): Promise<void> {
     newScore = Math.max(0, (snap.data().sheriff_score ?? 0) + 50);
     tx.update(userRef, {
       is_home_verified: true,
+      home_location: new GeoPoint(lat, lng),
+      home_address: address,
       sheriff_score: newScore,
       rank_level: computeRankLevel(newScore),
     });
