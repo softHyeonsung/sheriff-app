@@ -35,6 +35,7 @@ import {
 } from '../../src/api/posts';
 import { promptAndReport } from '../../src/api/reports';
 import { fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
+import { menuStyles } from '../../src/styles/actionMenu';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMapStore } from '../../src/store/mapStore';
 import { usePostStore } from '../../src/store/postStore';
@@ -720,30 +721,4 @@ const styles = StyleSheet.create({
     color: '#1A1108',
   },
   sendBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', flexShrink: 0 },
-});
-
-const menuStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 32,
-    paddingTop: 8,
-  },
-  sep: { height: 1, backgroundColor: '#F5F5F5' },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-  },
-  itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
-  itemLabel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#1A1108' },
-  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 });

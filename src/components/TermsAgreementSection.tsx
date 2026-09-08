@@ -82,30 +82,13 @@ interface Props {
 
 export default function TermsAgreementSection({ values, onChange }: Props) {
   const [viewingDoc, setViewingDoc] = useState<keyof TermsAgreementValues | null>(null);
-  const allAgreed = isAllRequiredAgreed(values);
 
   const toggle = (key: keyof TermsAgreementValues) => {
     onChange({ ...values, [key]: !values[key] });
   };
 
-  const toggleAll = () => {
-    const next = !allAgreed;
-    onChange({ terms: next, privacy: next, location: next });
-  };
-
   return (
     <View style={s.container}>
-      <TouchableOpacity style={s.allRow} onPress={toggleAll} accessibilityRole="checkbox" accessibilityState={{ checked: allAgreed }}>
-        <Ionicons
-          name={allAgreed ? 'checkmark-circle' : 'ellipse-outline'}
-          size={22}
-          color={allAgreed ? '#FFAC30' : '#B89060'}
-        />
-        <Text style={s.allLabel}>약관 전체 동의</Text>
-      </TouchableOpacity>
-
-      <View style={s.divider} />
-
       {ROWS.map(({ key, label }) => (
         <View key={key} style={s.row}>
           <TouchableOpacity
@@ -167,14 +150,6 @@ const s = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
   },
-  allRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
-  allLabel: {
-    marginLeft: 8,
-    fontSize: 14,
-    fontFamily: 'AppleSDGothicNeo-SemiBold',
-    color: '#1A1108',
-  },
-  divider: { height: 1, backgroundColor: '#D4D4D4', marginVertical: 10 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

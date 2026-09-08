@@ -21,6 +21,7 @@ import { FirestorePost, subscribeFeedPosts } from '../../src/api/posts';
 import { promptAndReport } from '../../src/api/reports';
 import { UserProfile, blockUser, fetchMyProfile, followUser, unblockUser, unfollowUser } from '../../src/api/users';
 import { useAuthStore } from '../../src/store/authStore';
+import { menuStyles } from '../../src/styles/actionMenu';
 
 const SCREEN_W = Dimensions.get('window').width;
 const CELL = SCREEN_W / 3;
@@ -468,29 +469,4 @@ const s = StyleSheet.create({
 
   backBtn: { paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#FFAC30', borderRadius: 14 },
   backBtnText: { fontSize: 15, fontFamily: 'AppleSDGothicNeo-Bold', color: '#1A1108' },
-});
-
-const menuStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 32,
-    paddingTop: 8,
-  },
-  sep: { height: 1, backgroundColor: '#F5F5F5' },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-  },
-  itemDanger: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-SemiBold', color: '#E05252' },
-  itemCancel: { fontSize: 16, fontFamily: 'AppleSDGothicNeo-Regular', color: '#7A5C38' },
 });
