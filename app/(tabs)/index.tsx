@@ -33,7 +33,7 @@ import {
   sendMapShareMessage,
 } from '../../src/api/chat';
 import KOREA_DISTRICTS from '../../src/constants/koreaDistricts';
-import { haversineM } from '../../src/constants/mockGatherings';
+import { haversineM } from '../../src/utils/geo';
 import { FirestoreGathering, subscribeGatherings } from '../../src/api/gatherings';
 import { FirestorePost, subscribeFeedPosts } from '../../src/api/posts';
 import { useAuthStore } from '../../src/store/authStore';

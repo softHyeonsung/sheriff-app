@@ -34,7 +34,7 @@ import {
   formatDistanceM,
   formatTimeLeft,
   haversineM,
-} from '../../src/constants/mockGatherings';
+} from '../../src/utils/geo';
 
 const CATEGORIES = [
   { icon: 'apps' as const,            label: '전체' },

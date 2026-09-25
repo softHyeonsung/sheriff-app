@@ -4,7 +4,6 @@ import {
     OAuthProvider,
     createUserWithEmailAndPassword,
     signInWithCredential,
-    signInWithCustomToken,
     signInWithEmailAndPassword,
     signOut
 } from 'firebase/auth';
@@ -106,19 +105,7 @@ export const loginWithApple = async (identityToken: string, rawNonce: string, ag
   }
 };
 
-// 5. 카카오 로그인 (Firebase Custom Token — Cloud Function에서 발급)
-export const loginWithKakaoCustomToken = async (customToken: string, agreedToTerms?: boolean) => {
-  try {
-    const userCredential = await signInWithCustomToken(auth, customToken);
-    const { uid, email } = userCredential.user;
-    await createUserDoc(uid, email ?? '', 'kakao', { agreedToTerms });
-    return userCredential.user;
-  } catch (error: any) {
-    throw { code: error.code ?? 'unknown', message: error.message ?? String(error) };
-  }
-};
-
-// 6. 로그아웃
+// 5. 로그아웃
 export const logout = async () => {
   try {
     await signOut(auth);

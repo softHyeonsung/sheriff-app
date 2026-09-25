@@ -15,7 +15,6 @@ jest.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: jest.fn(),
   signInWithEmailAndPassword: jest.fn(),
   signInWithCredential: jest.fn(),
-  signInWithCustomToken: jest.fn(),
   signOut: jest.fn(),
   GoogleAuthProvider: { credential: jest.fn() },
   OAuthProvider: jest.fn().mockImplementation(() => ({
@@ -30,11 +29,10 @@ jest.mock('firebase/firestore', () => ({
   serverTimestamp: jest.fn(() => 'MOCK_TIMESTAMP'),
 }));
 
-import { signUp, login, loginWithKakaoCustomToken } from '../src/api/auth';
+import { signUp, login } from '../src/api/auth';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInWithCustomToken,
 } from 'firebase/auth';
 import { getDoc, setDoc } from 'firebase/firestore';
 
@@ -134,21 +132,5 @@ describe('login', () => {
       code: 'auth/wrong-password',
       message: 'Firebase: Error (auth/wrong-password).',
     });
-  });
-});
-
-describe('loginWithKakaoCustomToken', () => {
-  it('creates Firestore doc with kakao provider on first login', async () => {
-    (signInWithCustomToken as jest.Mock).mockResolvedValue({
-      user: mockUser,
-    });
-    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
-    (setDoc as jest.Mock).mockResolvedValue(undefined);
-
-    await loginWithKakaoCustomToken('valid-custom-token', true);
-
-    const docData = (setDoc as jest.Mock).mock.calls[0][1];
-    expect(docData.provider).toBe('kakao');
-    expect(docData.sheriff_score).toBe(0);
   });
 });

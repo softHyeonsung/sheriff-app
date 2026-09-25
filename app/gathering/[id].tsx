@@ -33,7 +33,7 @@ import {
 import { formatTimeAgo } from '../../src/api/posts';
 import { fetchMyProfile, followUser, unfollowUser } from '../../src/api/users';
 import { useAuthStore } from '../../src/store/authStore';
-import { formatTimeLeft } from '../../src/constants/mockGatherings';
+import { formatTimeLeft } from '../../src/utils/geo';
 import MiniMap from '../../src/components/MiniMap';
 import ShareModal from '../../src/components/ShareModal';
 

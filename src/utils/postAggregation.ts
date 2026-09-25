@@ -3,7 +3,7 @@
 // index.tsx와 shared-map/[uid].tsx 양쪽에서 import하는 공유 모듈 (엔지니어링 리뷰 확정).
 
 import type { FirestorePost } from '../api/posts';
-import { haversineM } from '../constants/mockGatherings';
+import { haversineM } from './geo';
 
 export type LandmarkTier = 'flag' | 'signpost' | 'house' | 'hotel' | 'building';
 
